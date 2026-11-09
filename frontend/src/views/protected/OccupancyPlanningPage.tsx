@@ -162,14 +162,14 @@ export function OccupancyPlanningPage() {
             type="button"
             data-testid="occupancy-prev-window"
             onClick={() => setWindowStart((current) => addDaysIso(current, -WINDOW_DAYS))}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
             {t("occupancy.prevWindow")}
           </button>
           <button
             type="button"
             onClick={() => setWindowStart(today)}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
             {t("occupancy.today")}
           </button>
@@ -177,7 +177,7 @@ export function OccupancyPlanningPage() {
             type="button"
             data-testid="occupancy-next-window"
             onClick={() => setWindowStart((current) => addDaysIso(current, WINDOW_DAYS))}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
             {t("occupancy.nextWindow")}
           </button>
