@@ -28,6 +28,13 @@ from app.models.whatsapp_crm import (
 APP_SECRET = "meta-app-secret-for-tests"
 PHONE_NUMBER_ID = "111222333"
 
+pytestmark = pytest.mark.skip(
+    reason=(
+        "El webhook de WhatsApp está fuera del piloto; "
+        "la ausencia de su ruta se comprueba en test_whatsapp_pilot_disabled.py."
+    )
+)
+
 
 def _signature(body: bytes) -> str:
     return "sha256=" + hmac.new(APP_SECRET.encode(), body, hashlib.sha256).hexdigest()

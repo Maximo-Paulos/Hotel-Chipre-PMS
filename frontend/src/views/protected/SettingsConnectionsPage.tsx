@@ -306,7 +306,7 @@ export function SettingsConnectionsPage() {
                   <p className="text-xs text-slate-500">{connectionDescription[cat.provider] || "Conexión del hotel"}</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {status === "not_connected" ? "No conectado" : status}
+                  {cat.provider === "whatsapp" ? "Próximamente" : status === "not_connected" ? "No conectado" : status}
                 </span>
               </div>
 
@@ -321,7 +321,7 @@ export function SettingsConnectionsPage() {
                 </a>
               )}
 
-              {isConnected && (
+              {isConnected && cat.provider !== "whatsapp" && (
                 <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                   <p className="font-semibold">Conexión activa</p>
                   <p className="mt-1 text-xs text-emerald-700">
@@ -334,9 +334,9 @@ export function SettingsConnectionsPage() {
               )}
 
               {cat.provider === "whatsapp" && (
-                <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
-                  <p className="font-semibold">Administración específica de WhatsApp</p>
-                  <p className="mt-1 text-xs">No uses los controles genéricos de integraciones para conectar, refrescar o revocar este canal.</p>
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <p className="font-semibold">WhatsApp estará disponible próximamente.</p>
+                  <p className="mt-1 text-xs">La conexión y la bandeja todavía no están habilitadas para el piloto.</p>
                 </div>
               )}
 
@@ -442,8 +442,8 @@ export function SettingsConnectionsPage() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {cat.provider === "whatsapp" ? (
-                  <Link className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white" to="/settings/whatsapp">
-                    Abrir configuración de WhatsApp
+                  <Link className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-brand-300" to="/settings/whatsapp">
+                    Ver información
                   </Link>
                 ) : !isConnected && isOauth ? (
                   <>
