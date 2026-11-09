@@ -69,6 +69,47 @@ test("housekeeping checklists are hotel-scoped and refresh with room state", asy
   client.clear();
 });
 
+test("stock transfer refresh can wait for active location summaries before confirming success", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const hotelId = 41;
+  const queryKey = ["stock-summary", hotelId];
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const previousSummary = [{ item: { id: 9 }, location_balances: [{ location_id: 1, current_quantity: "10" }] }];
+  const updatedSummary = [{ item: { id: 9 }, location_balances: [
+    { location_id: 1, current_quantity: "9" },
+    { location_id: 2, current_quantity: "1" }
+  ] }];
+  client.setQueryData(queryKey, previousSummary);
+
+  let releaseFetch;
+  let fetchStarted = false;
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn: () => {
+      fetchStarted = true;
+      return new Promise((resolve) => { releaseFetch = resolve; });
+    },
+    staleTime: Infinity,
+    retry: false
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+
+  let refreshFinished = false;
+  const refresh = invalidation.refreshStockState(client, hotelId, { waitForActiveRefetch: true })
+    .then(() => { refreshFinished = true; });
+
+  assert.equal(fetchStarted, true, "the active stock summary should start reconciling immediately");
+  assert.equal(refreshFinished, false, "transfer confirmation must wait for the fresh location balances");
+  assert.deepEqual(client.getQueryData(queryKey), previousSummary, "keep the last successful summary visible while it reloads");
+
+  releaseFetch(updatedSummary);
+  await refresh;
+
+  assert.deepEqual(client.getQueryData(queryKey), updatedSummary);
+  unsubscribe();
+  client.clear();
+});
+
 test("task events refresh task, history, attachment, and handoff queries for one hotel", async (context) => {
   const { invalidation } = await loadQueryModules(context);
   const hotelId = 41;

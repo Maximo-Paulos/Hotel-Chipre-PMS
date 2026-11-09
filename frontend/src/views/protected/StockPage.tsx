@@ -450,7 +450,9 @@ export function StockPage() {
       createStockTransfer(payload, { idempotencyKey }, session),
     onSuccess: async ({ outbound }) => {
       transferAttemptRef.current = null;
-      await invalidateStock();
+      // The location cards show the stock summary, so don't report success
+      // until that active projection has reconciled with the committed transfer.
+      await refreshStockState(queryClient, session.hotelId, { waitForActiveRefetch: true });
       setMovementForm((current) => ({ ...current, item_id: String(outbound.item_id), location_id: "" }));
       setTransferForm((current) => ({ ...emptyTransferForm, item_id: current.item_id }));
       setMessage("Traspaso registrado.");
