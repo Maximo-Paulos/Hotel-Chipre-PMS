@@ -28,6 +28,24 @@ from app.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 _STALE_REQUEST_AFTER = timedelta(minutes=5)
+_ALLOCATION_PROCESSING_INTERVAL = timedelta(minutes=5)
+_MAX_HOTELS_PER_PROCESSING_CYCLE = 3
+
+
+def _rotate_active_hotel_ids(
+    hotel_ids: list[int], *, now: datetime | None = None
+) -> list[int]:
+    """Rotate the bounded tenant scan by the durable five-minute wall clock."""
+    if len(hotel_ids) < 2:
+        return hotel_ids
+    cycle_time = now or datetime.now(timezone.utc)
+    if cycle_time.tzinfo is None:
+        cycle_time = cycle_time.replace(tzinfo=timezone.utc)
+    cycle_time = cycle_time.astimezone(timezone.utc)
+    interval_seconds = int(_ALLOCATION_PROCESSING_INTERVAL.total_seconds())
+    cycle_number = int(cycle_time.timestamp()) // interval_seconds
+    start_index = cycle_number % len(hotel_ids)
+    return hotel_ids[start_index:] + hotel_ids[:start_index]
 
 
 def _session(database_url: str | None = None) -> Session:
@@ -223,14 +241,15 @@ def process_recalculation_requests(
         return totals
     db = _session(database_url)
     try:
-        # The fixed cap bounds a beat run while scanning every tenant so a
-        # quiet early hotel cannot starve pending work for later hotels.
+        # Rotate the bounded tenant scan on each five-minute cycle. Deferred
+        # requests consume a slot; static ID order could otherwise starve
+        # later hotels when the same early requests keep deferring.
         if hotel_id is not None:
             hotel_ids = [hotel_id]
         else:
             from app.tasks.report_tasks import _active_hotel_ids
 
-            hotel_ids = _active_hotel_ids(db)
+            hotel_ids = _rotate_active_hotel_ids(_active_hotel_ids(db))
         for queued_hotel_id in hotel_ids:
             try:
                 counts = _process_hotel_request(
@@ -240,7 +259,10 @@ def process_recalculation_requests(
                 )
                 for key in totals:
                     totals[key] += counts[key]
-                if hotel_id is None and totals["selected"] >= 3:
+                if (
+                    hotel_id is None
+                    and totals["selected"] >= _MAX_HOTELS_PER_PROCESSING_CYCLE
+                ):
                     break
             except Exception as exc:
                 db.rollback()
