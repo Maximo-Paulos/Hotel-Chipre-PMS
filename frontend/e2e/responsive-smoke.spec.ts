@@ -73,6 +73,14 @@ test.describe("Responsive mobile smoke", () => {
 
   test("dashboard fits an iPhone viewport and exposes operational navigation", async ({ page }) => {
     await login(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const primaryAction = page.getByRole("link", { name: /^(?:Nueva reserva|New reservation)$/i });
+    const secondaryAction = page.getByRole("link", { name: /^(?:Asignar habitación|Assign room)$/i });
+    const primaryActionBox = await primaryAction.boundingBox();
+    const secondaryActionBox = await secondaryAction.boundingBox();
+    expect(primaryActionBox?.height, "primary dashboard action should be at least 52px high on mobile").toBeGreaterThanOrEqual(52);
+    expect(secondaryActionBox?.height, "secondary dashboard action should be at least 48px high on mobile").toBeGreaterThanOrEqual(48);
 
     const mobileReservations = page.getByTestId("dashboard-mobile-reservations");
     await expect(mobileReservations).toHaveCount(1);
