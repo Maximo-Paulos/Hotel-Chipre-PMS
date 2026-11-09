@@ -1969,9 +1969,9 @@
     "video": []
   },
   "total_files": 1959,
-  "total_words": 2667524,
+  "total_words": 2665571,
   "needs_graph": true,
-  "warning": "Large corpus: 1959 files · ~2,667,524 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1959 files · ~2,665,571 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1992,7 +1992,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "9702c0fd811133eaef5ad31a11e6e1408143552d",
+    "source_hash": "40223d99646747faa071c43365bb25ce81d74691",
     "branches": [
       "codex/allocation-history-localization-20261107",
       "codex/allocation-latest-query",
@@ -2128,6 +2128,7 @@
       "fix/settings-permissions-api-keys-load",
       "fix/shift-handoff-immediate-list",
       "fix/stale-allocation-pending-recovery",
+      "fix/stale-allocation-recovery",
       "fix/stale-bundle-recovery-20261107",
       "fix/stay-extension-preserve-nightly-rate",
       "fix/stock-empty-form-validation-copy",
@@ -2154,11 +2155,11 @@
     "source": "default-auto",
     "root": ".",
     "git_root": ".",
-    "head": "9702c0fd811133eaef5ad31a11e6e1408143552d",
+    "head": "40223d99646747faa071c43365bb25ce81d74691",
     "candidate_count": 2150,
     "included_count": 1959,
     "excluded_untracked_count": 0,
-    "excluded_ignored_count": 1913,
+    "excluded_ignored_count": 2317,
     "excluded_sensitive_count": 15,
     "missing_committed_count": 0,
     "warnings": [],

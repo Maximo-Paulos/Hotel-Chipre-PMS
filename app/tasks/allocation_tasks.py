@@ -15,6 +15,7 @@ from app.models.allocation import (
     AllocationRunStatusEnum,
 )
 from app.services.allocation_trigger_service import (
+    ALLOCATION_APPLY_TRIGGER_TYPES,
     ALLOCATION_PROCESSING_INTERVAL,
     ALLOCATION_PROPOSAL_TRIGGER_TYPES,
     MAX_HOTELS_PER_PROCESSING_CYCLE,
@@ -57,17 +58,6 @@ def _session(database_url: str | None = None) -> Session:
     settings = get_settings()
     engine = get_engine(database_url or settings.DATABASE_URL)
     return sessionmaker(bind=engine)()
-
-
-def _active_hotel_count(db: Session) -> int:
-    """Count active tenants only from this globally scoped worker session."""
-    from app.models.hotel_config import HotelConfiguration
-
-    return (
-        db.query(HotelConfiguration.id)
-        .filter(HotelConfiguration.subscription_active.is_(True))
-        .count()
-    )
 
 
 def _claim_request(
@@ -171,11 +161,7 @@ def _process_hotel_request(
         allocation_kwargs = {
             "hotel_id": hotel_id,
             "trigger_type": trigger_type,
-            "apply": trigger_type in {
-                "reservation_created_auto_proposal",
-                "new_reservation",
-                "manual_api_recalculate",
-            },
+            "apply": trigger_type in ALLOCATION_APPLY_TRIGGER_TYPES,
             "queued_run_id": request_id,
             "origin_key": normalized_origin_key,
         }
@@ -272,10 +258,12 @@ def process_recalculation_requests(
         # requests consume a slot. Page-aligned starts keep each group within
         # one full queue scan; walking the remainder still serves sparse work.
         if hotel_id is not None:
+            # A targeted dispatch owns only this hotel's queue. It can claim
+            # any durable PENDING request directly; deriving its expiry TTL
+            # would require a global active-hotel count. The scheduled global
+            # scan remains responsible for queue-SLA expiry.
             hotel_ids = [hotel_id]
-            stale_after = pending_allocation_stale_after(
-                active_hotel_count=_active_hotel_count(db)
-            )
+            stale_after = None
         else:
             from app.tasks.report_tasks import _active_hotel_ids
 
