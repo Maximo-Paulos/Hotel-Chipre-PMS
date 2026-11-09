@@ -162,7 +162,9 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(pendingBalanceDrawer.getByLabel("Método de pago")).toBeVisible();
   await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toBeVisible();
   await expect(pendingBalanceDrawer.getByLabel("Acepta términos y condiciones", { exact: true })).not.toBeChecked();
-  await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toContainText("Completá el lugar de nacimiento.");
+  const missingFieldsList = pendingBalanceDrawer.getByTestId("checkin-capture-form").getByRole("list");
+  await expect(missingFieldsList.getByRole("listitem", { name: "Completá el lugar de nacimiento.", exact: true })).toBeVisible();
+  await expect(missingFieldsList).not.toContainText(".;");
   await pendingBalanceDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
 
   // Pagar el total antes de poder hacer check-in (regla de negocio: fully_paid).
