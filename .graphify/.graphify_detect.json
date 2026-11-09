@@ -1827,9 +1827,9 @@
     "video": []
   },
   "total_files": 1817,
-  "total_words": 2615071,
+  "total_words": 2615538,
   "needs_graph": true,
-  "warning": "Large corpus: 1817 files · ~2,615,071 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1817 files · ~2,615,538 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1850,7 +1850,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "40223d99646747faa071c43365bb25ce81d74691",
+    "source_hash": "8dea0c85fd10abaa6114bb22df7069448f9555bd",
     "branches": [
       "codex/allocation-history-localization-20261107",
       "codex/allocation-latest-query",
@@ -1950,6 +1950,7 @@
       "fix/dashboard-room-cta",
       "fix/disable-whatsapp-pilot",
       "fix/edit-stay-recalculate",
+      "fix/frontend-report-date-guest-history",
       "fix/fx-quote-selection",
       "fix/guest-arrival-submit",
       "fix/guest-search-cloud-qa",
@@ -2016,7 +2017,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "40223d99646747faa071c43365bb25ce81d74691",
+    "head": "8dea0c85fd10abaa6114bb22df7069448f9555bd",
     "candidate_count": null,
     "included_count": 1817,
     "excluded_untracked_count": 0,
