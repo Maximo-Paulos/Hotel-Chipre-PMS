@@ -1096,6 +1096,7 @@
       "refundReasonPlaceholder": "Brief, verifiable reason",
       "paymentPermissionRequired": "Your role cannot record payments.",
       "paymentAuthorizedUserRequired": "Your profile cannot record payments or access the cash register. Ask an authorized user to record the payment, then continue check-in.",
+      "noPaymentCollectionRequired": "No payments are due. Cash register permission is only needed to record payments.",
       "paymentPermissionChecking": "Checking whether your profile can record payments…",
       "paymentPermissionCheckFailed": "We couldn't verify whether your profile can record payments. Retry before continuing.",
       "paymentProcessing": "Processing the financial operation...",
