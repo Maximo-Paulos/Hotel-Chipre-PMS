@@ -1858,6 +1858,7 @@ def sync_reservation_financial_status(
     *,
     hotel_id: int,
     reason_code: str,
+    refresh_facts: bool = True,
 ) -> None:
     if reservation.status in (
         ReservationStatusEnum.CANCELLED,
@@ -1892,7 +1893,14 @@ def sync_reservation_financial_status(
         return
 
     if reservation.can_transition_to(target_status):
-        transition_reservation_status(db, reservation, target_status, hotel_id, reason_code=reason_code)
+        transition_reservation_status(
+            db,
+            reservation,
+            target_status,
+            hotel_id,
+            reason_code=reason_code,
+            refresh_facts=refresh_facts,
+        )
         return
 
     previous_status = reservation.status

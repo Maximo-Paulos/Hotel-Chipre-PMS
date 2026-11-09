@@ -2806,6 +2806,7 @@ def update_reservation_fields(
     )
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date
+    original_total_amount = reservation.total_amount
     original_room_id = reservation.room_id
 
     new_ci = update_data.get("check_in_date", reservation.check_in_date)
@@ -3002,6 +3003,24 @@ def update_reservation_fields(
         reservation.manual_rate_reason = reason
         if total_adjustment_kind == "manual":
             reservation.manual_rate_scope = manual_rate_scope
+
+    if (
+        reservation.check_in_date != original_check_in
+        or reservation.check_out_date != original_check_out
+        or reservation.total_amount != original_total_amount
+    ):
+        # Reprice and paid-total correction can invalidate a cached FULLY_PAID
+        # status. Keep status reconciliation in the same write transaction;
+        # this function refreshes the old/new analytics window below.
+        from app.services.payment_service import sync_reservation_financial_status
+
+        sync_reservation_financial_status(
+            db,
+            reservation,
+            hotel_id=hotel_id,
+            reason_code="reservation_financial_terms_changed",
+            refresh_facts=False,
+        )
 
     reservation.version = (reservation.version or 0) + 1
     db.flush()

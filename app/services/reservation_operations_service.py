@@ -1195,6 +1195,7 @@ def change_reservation_dates(
     if not manager_authorized:
         raise ReservationOperationsError("Modificar fechas con pagos requiere gerente, dueno o codueno")
 
+    previous_status = reservation.status
     update_reservation_fields(
         db,
         reservation,
@@ -1212,22 +1213,7 @@ def change_reservation_dates(
         recalculate_explicit_price=pricing_mode == "recalculate",
         refresh_facts=False,
     )
-    status_transitioned = False
-    if (
-        reservation.status != ReservationStatusEnum.FULLY_PAID
-        and Decimal(str(reservation.total_amount or 0)) <= Decimal(str(reservation.amount_paid or 0))
-    ):
-        transition_reservation_status(
-            db,
-            reservation,
-            ReservationStatusEnum.FULLY_PAID,
-            hotel_id,
-            reason_code="date_change_auto_fully_paid",
-            notes="Date change recalculated total below or equal to paid amount",
-            changed_by_user_id=changed_by_user_id,
-            refresh_facts=False,
-        )
-        status_transitioned = True
+    status_transitioned = reservation.status != previous_status
     reservation.notes = ((reservation.notes or "") + f"\n[DATE CHANGE] {reason or 'Date changed with payments preserved'}").strip()
     db.flush()
     # Update and status transition deferred their individual refreshes so the

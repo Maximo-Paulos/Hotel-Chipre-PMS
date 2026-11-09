@@ -271,6 +271,43 @@ def test_change_dates_deposit_paid_auto_fully_paid_when_new_total_lower(db, samp
     assert res.total_amount < res.amount_paid
 
 
+def test_change_dates_downgrades_fully_paid_when_recalculated_total_exceeds_paid(
+    db, sample_guest, sample_rooms
+):
+    """A date-driven price increase must reconcile the cached paid status."""
+    res = _reservation(
+        db,
+        code="CD-FP-BALANCE-01",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2027, 10, 1),
+        check_out=date(2027, 10, 4),
+        total_amount=300.0,
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+        pricing_snapshot=(
+            '{"pricing_source":"manual_total_override","nightly_rate":100.0,'
+            '"nights":3,"total_amount":300.0}'
+        ),
+    )
+
+    result = change_reservation_dates(
+        db,
+        reservation=res,
+        hotel_id=sample_guest.hotel_id,
+        check_in_date=date(2027, 10, 1),
+        check_out_date=date(2027, 10, 6),
+        client_version=res.version or 0,
+        manager_authorized=True,
+    )
+
+    db.refresh(res)
+    assert res.total_amount == 500.0
+    assert res.amount_paid == 300.0
+    assert res.status == ReservationStatusEnum.DEPOSIT_PAID
+    assert result.status_transitioned is True
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # §8.5  Extend stay
 # ─────────────────────────────────────────────────────────────────────────────
