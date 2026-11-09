@@ -178,3 +178,68 @@ test("reports paginates pending balance details without changing the global tota
   await expect(page.getByTestId("pending-balance-global-total")).toContainText("5.100");
   await expect.poll(() => requests).toContain(2);
 });
+
+test("reports loads the selected day without keeping the previous day's report visible", async ({ page }) => {
+  const firstDate = "2026-11-08";
+  const secondDate = "2026-11-09";
+  const requestedDates: string[] = [];
+  let releaseSecondDateResponse!: () => void;
+  const secondDateResponseGate = new Promise<void>((resolve) => {
+    releaseSecondDateResponse = resolve;
+  });
+
+  await page.route("**/api/reports/operational/daily**", async (route) => {
+    const url = new URL(route.request().url());
+    const reportDate = url.searchParams.get("report_date") ?? "";
+    requestedDates.push(reportDate);
+    if (reportDate === secondDate) {
+      await secondDateResponseGate;
+    }
+    const arrivalsCount = reportDate === firstDate ? 1 : reportDate === secondDate ? 2 : 0;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        report_date: reportDate,
+        generated_at: `${reportDate}T12:00:00Z`,
+        arrivals: { count: arrivalsCount, reservations: [] },
+        no_shows: { count: 0, reservations: [] },
+        departures: { count: 0, reservations: [] },
+        pending_payments: { count: 0, reservations: [] },
+        late_arrivals: [],
+        available_with_review: [],
+        active_room_blocks: [],
+        alert_count: 0,
+        cash_session: {
+          status: "closed",
+          session_id: null,
+          opened_at: null,
+          opened_by_user_id: null,
+          currency_code: null
+        },
+        alerts: []
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/reportes");
+  const dateInput = page.getByLabel("Fecha", { exact: true });
+  const arrivalsMetric = () => page.getByText("Llegadas", { exact: true }).locator("..");
+
+  await dateInput.fill(firstDate);
+  await expect(arrivalsMetric()).toContainText("1");
+
+  try {
+    await dateInput.fill(secondDate);
+    await expect.poll(() => requestedDates).toContain(secondDate);
+    await expect(page.getByText("Cargando reporte...", { exact: true })).toBeVisible();
+    await expect(page.getByText("Llegadas", { exact: true })).toHaveCount(0);
+  } finally {
+    releaseSecondDateResponse();
+  }
+
+  await expect(arrivalsMetric()).toContainText("2");
+  expect(requestedDates).toContain(secondDate);
+});

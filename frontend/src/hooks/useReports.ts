@@ -47,7 +47,7 @@ export function useDailyOperationalReport(reportDate: string, pendingPage = 1, p
     enabled: Boolean(reportDate) && hasValidSession(session),
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false,
-    placeholderData: (previousData) => previousData
+    placeholderData: (previousData) => previousData?.report_date === reportDate ? previousData : undefined
   });
 }
 

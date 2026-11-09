@@ -31,7 +31,7 @@ import { useSession } from "../../state/session";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { refreshAfterMutation, refreshGuestState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
-import { addDaysIso } from "../../utils/date";
+import { addDaysIso, formatHotelDate } from "../../utils/date";
 import { useBusinessDate } from "../../hooks/useBusinessClock";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
@@ -107,7 +107,7 @@ const formatStatus = (status: string, t: TFunction) => {
 
 const formatDate = (value: string | null | undefined, t: TFunction) => {
   if (!value) return t("checkIn.noDate");
-  return new Date(value).toLocaleDateString("es-AR");
+  return formatHotelDate(value, "UTC");
 };
 
 const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
