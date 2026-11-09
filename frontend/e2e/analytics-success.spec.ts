@@ -108,6 +108,8 @@ test("operations renders room event labels in Spanish", async ({ page }) => {
           cards: [],
           room_events_open: [{
             room_id: 42,
+            event_type: "maintenance",
+            reason_code: "inspection",
             created_by_user_id: 7,
             closed_by_user_id: 8,
             row_kind: "room_state_event"
@@ -125,6 +127,10 @@ test("operations renders room event labels in Spanish", async ({ page }) => {
   await expect(page.getByRole("columnheader", { name: "ID de usuario creador", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "ID de usuario que cerró", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Tipo de registro", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Mantenimiento", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Inspección", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "maintenance", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "inspection", exact: true })).toHaveCount(0);
   await expect(page.getByText(/Room Events Open|Created By User Id|Closed By User Id|Row Kind/)).toHaveCount(0);
 });
 

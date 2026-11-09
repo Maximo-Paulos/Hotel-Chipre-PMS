@@ -390,8 +390,9 @@ const tableValue = (
   value: unknown,
   key = "",
   row?: Record<string, unknown>,
-  unavailableCurrencyLabel = "No disponible"
-): string => formatAnalyticsTableValue(value, key, row, unavailableCurrencyLabel, VALUE_LABELS);
+  unavailableCurrencyLabel = "No disponible",
+  valueLabels: Record<string, Record<string, string>> = VALUE_LABELS
+): string => formatAnalyticsTableValue(value, key, row, unavailableCurrencyLabel, valueLabels);
 
 const sectionLabel = (key: string) =>
   FIELD_LABELS[key] ??
@@ -745,6 +746,23 @@ function SectionTables({
 }) {
   const { t } = useTranslation("appshell");
   const unavailableCurrencyLabel = t("currency.historicalRateUnavailable");
+  const valueLabels: Record<string, Record<string, string>> = {
+    ...VALUE_LABELS,
+    event_type: {
+      out_of_service: t("analyticsRoomEvents.types.out_of_service"),
+      maintenance: t("analyticsRoomEvents.types.maintenance"),
+      housekeeping_block: t("analyticsRoomEvents.types.housekeeping_block"),
+      renovation: t("analyticsRoomEvents.types.renovation")
+    },
+    reason_code: {
+      plumbing: t("analyticsRoomEvents.reasons.plumbing"),
+      electrical: t("analyticsRoomEvents.reasons.electrical"),
+      furniture: t("analyticsRoomEvents.reasons.furniture"),
+      deep_clean: t("analyticsRoomEvents.reasons.deep_clean"),
+      inspection: t("analyticsRoomEvents.reasons.inspection"),
+      other: t("analyticsRoomEvents.reasons.other")
+    }
+  };
   const entries = Object.entries(data).filter(([key]) => key !== "cards");
   if (entries.length === 0) {
     return null;
@@ -782,7 +800,7 @@ function SectionTables({
                       <tr key={`${key}-${index}`}>
                         {headers.map((header) => (
                           <td key={header} className="px-3 py-2 text-slate-700">
-                            {tableValue(row[header], header, row, unavailableCurrencyLabel)}
+                            {tableValue(row[header], header, row, unavailableCurrencyLabel, valueLabels)}
                           </td>
                         ))}
                       </tr>
