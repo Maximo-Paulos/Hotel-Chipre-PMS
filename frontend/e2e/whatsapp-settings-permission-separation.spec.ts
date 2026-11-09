@@ -11,15 +11,16 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
-test("WhatsApp settings preserves tenant context and avoids inbox conversation polling", async ({ page }) => {
-  let conversationRequests = 0;
-  let documentLoads = 0;
-  page.on("load", () => {
-    documentLoads += 1;
-  });
+test("WhatsApp surfaces show coming soon and do not call disabled endpoints", async ({ page }) => {
+  const blockedRequests: string[] = [];
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname.startsWith("/api/whatsapp/conversations")) {
-      conversationRequests += 1;
+    const path = new URL(request.url()).pathname;
+    if (
+      path.startsWith("/api/public/whatsapp") ||
+      path.startsWith("/api/whatsapp") ||
+      path === "/api/webhooks/meta/whatsapp"
+    ) {
+      blockedRequests.push(path);
     }
   });
   await page.route("**/api/integrations", async (route) => {
@@ -41,29 +42,21 @@ test("WhatsApp settings preserves tenant context and avoids inbox conversation p
       },
     });
   });
-  await page.route("**/api/whatsapp/channel", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      json: { status: "ready", channel: null },
-    });
-  });
-
   await login(page);
   await page.goto("/settings/connections");
-  await expect(page.getByRole("heading", { name: "Conexiones", exact: true })).toBeVisible();
   const whatsappCard = page.getByTestId("integration-card-whatsapp");
   await expect(whatsappCard).toBeVisible();
+  await expect(whatsappCard.getByText("Próximamente")).toBeVisible();
   await expect(whatsappCard.getByRole("button")).toHaveCount(0);
-  const connectionPageLoadCount = documentLoads;
-  const channelResponse = page.waitForResponse((response) =>
-    new URL(response.url()).pathname === "/api/whatsapp/channel"
-  );
-  await page.getByRole("link", { name: "Abrir configuración de WhatsApp" }).click();
+
+  await whatsappCard.getByRole("link", { name: "Ver información" }).click();
   await expect(page).toHaveURL(/\/settings\/whatsapp$/);
   await expect(page.getByRole("heading", { name: "WhatsApp Business", exact: true })).toBeVisible();
-  await channelResponse;
-  await page.waitForTimeout(16_000);
-  expect(conversationRequests).toBe(0);
-  expect(documentLoads).toBe(connectionPageLoadCount);
+  await expect(page.getByText("Próximamente")).toBeVisible();
+  await expect(page.getByPlaceholder("WABA ID")).toHaveCount(0);
+
+  await page.goto("/operacion/whatsapp");
+  await expect(page.getByRole("heading", { name: "WhatsApp Business", exact: true })).toBeVisible();
+  await expect(page.getByText("Próximamente")).toBeVisible();
+  expect(blockedRequests).toEqual([]);
 });

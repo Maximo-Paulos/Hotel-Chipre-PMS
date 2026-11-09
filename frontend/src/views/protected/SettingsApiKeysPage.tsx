@@ -23,11 +23,11 @@ const purposeLabels: Record<ApiKeyPurpose, string> = {
   other: "Otro"
 };
 
-const purposeOptions: ApiKeyPurpose[] = ["whatsapp_bot", "web_engine", "channel_manager", "reporting", "other"];
+const purposeOptions: ApiKeyPurpose[] = ["web_engine", "channel_manager", "reporting", "other"];
 
 const emptyForm: IssueHotelApiKeyPayload = {
   name: "",
-  purpose: "whatsapp_bot",
+  purpose: "other",
   expires_at: null
 };
 
