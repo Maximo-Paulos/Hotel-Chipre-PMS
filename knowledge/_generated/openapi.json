@@ -50208,6 +50208,35 @@
               }
             ],
             "title": "Business Recorded At"
+          },
+          "cash_eligible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Eligible"
+          },
+          "cash_exclusion_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "voided",
+                  "outside_session_period",
+                  "transaction_missing",
+                  "transaction_not_completed",
+                  "non_cash_payment"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Exclusion Reason"
           }
         },
         "type": "object",
@@ -50565,6 +50594,26 @@
             "type": "string",
             "title": "Adjustment Total"
           },
+          "confirmed_cash_income_total": {
+            "type": "string",
+            "title": "Confirmed Cash Income Total"
+          },
+          "confirmed_cash_expense_total": {
+            "type": "string",
+            "title": "Confirmed Cash Expense Total"
+          },
+          "confirmed_cash_adjustment_total": {
+            "type": "string",
+            "title": "Confirmed Cash Adjustment Total"
+          },
+          "confirmed_cash_handoff_total": {
+            "type": "string",
+            "title": "Confirmed Cash Handoff Total"
+          },
+          "confirmed_cash_movements_count": {
+            "type": "integer",
+            "title": "Confirmed Cash Movements Count"
+          },
           "confirmed_cash_total": {
             "type": "string",
             "title": "Confirmed Cash Total"
@@ -50581,6 +50630,10 @@
           "movements_count": {
             "type": "integer",
             "title": "Movements Count"
+          },
+          "recorded_movements_count": {
+            "type": "integer",
+            "title": "Recorded Movements Count"
           },
           "by_collector": {
             "items": {
@@ -50599,9 +50652,15 @@
           "income_total",
           "expense_total",
           "adjustment_total",
+          "confirmed_cash_income_total",
+          "confirmed_cash_expense_total",
+          "confirmed_cash_adjustment_total",
+          "confirmed_cash_handoff_total",
+          "confirmed_cash_movements_count",
           "confirmed_cash_total",
           "expected_balance",
-          "movements_count"
+          "movements_count",
+          "recorded_movements_count"
         ],
         "title": "CashSessionSummaryRead"
       },

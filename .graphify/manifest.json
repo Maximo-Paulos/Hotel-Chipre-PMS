@@ -340,8 +340,8 @@
     "hash": "d322cdb96c4fb625369803f981976cf4"
   },
   "app/api/reservations.py": {
-    "mtime": 1794169911348.9683,
-    "hash": "bd0f98c005d99bf75d9b396b5591c2d0"
+    "mtime": 1794192196363.3938,
+    "hash": "38cc53f5c6b32475008b30e147bf535c"
   },
   "app/api/room_blocks.py": {
     "mtime": 1794169911349.118,
@@ -476,8 +476,8 @@
     "hash": "8b3d248eaf343bc926bd4210cf07c521"
   },
   "app/models/allocation.py": {
-    "mtime": 1794169911351.9548,
-    "hash": "62dd1d6eb6bba60db4d03e4863725caa"
+    "mtime": 1794192196363.7725,
+    "hash": "334c71b17d45fdf2a397713da7243073"
   },
   "app/models/analytics.py": {
     "mtime": 1794169911352.0173,
@@ -660,8 +660,8 @@
     "hash": "9fb981fbaf22b39fce710c6076312c77"
   },
   "app/schemas/cash_register.py": {
-    "mtime": 1794169911357.179,
-    "hash": "974d7c4fb78128dc0cfca35188fdd730"
+    "mtime": 1794190840777.0642,
+    "hash": "e1fed1c861e51c0178f3ae662a37f194"
   },
   "app/schemas/commercial.py": {
     "mtime": 1794169911357.3655,
@@ -780,8 +780,8 @@
     "hash": "9c5d000f789b0650f5663b362f6ae61b"
   },
   "app/services/allocation_engine.py": {
-    "mtime": 1794169911360.4788,
-    "hash": "c50e1914547c1a1f25eb8c71b03598c9"
+    "mtime": 1794192083262.091,
+    "hash": "a0247ee9188c0e919acbbdcdcaa5c332"
   },
   "app/services/allocation_learning_service.py": {
     "mtime": 1794169911360.56,
@@ -828,8 +828,8 @@
     "hash": "58572edc3e9450f92bc065fbe33edec8"
   },
   "app/services/cash_register_service.py": {
-    "mtime": 1794169911362.2656,
-    "hash": "99e1bb9c530655ffe6c55de0acf2a480"
+    "mtime": 1794190840777.5422,
+    "hash": "ccc66f26804dad056a525c8f4e787e2d"
   },
   "app/services/checkin_service.py": {
     "mtime": 1794169911362.3557,
@@ -980,8 +980,8 @@
     "hash": "47502222d0c4407f00330af7dce823d7"
   },
   "app/services/payment_service.py": {
-    "mtime": 1794169911367.9004,
-    "hash": "2336f834a301c3d8d2e7ee719c16bd74"
+    "mtime": 1794195983203.9749,
+    "hash": "6926f366cdedb3794dc6e0e26fc65b76"
   },
   "app/services/payment_webhook_service.py": {
     "mtime": 1794169911368.0005,
@@ -1012,12 +1012,12 @@
     "hash": "c1d210a036dce7dac79db7b2f0cc8686"
   },
   "app/services/reservation_operations_service.py": {
-    "mtime": 1794169911369.4336,
-    "hash": "e06f1fc9770e1bdf756376d57291d379"
+    "mtime": 1794195983205.4265,
+    "hash": "15975d7f0c064edbf58858fe85bf0e12"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1794169911369.6968,
-    "hash": "4bc6615cc3543b7bd1c05508c61d6920"
+    "mtime": 1794195983205.9517,
+    "hash": "926744aee51a1e23989e1ade46985691"
   },
   "app/services/room_block_service.py": {
     "mtime": 1794169911369.904,
@@ -1116,8 +1116,8 @@
     "hash": "c87f326ccddcb8c797fb85009fdd454e"
   },
   "frontend/src/api/cashRegister.ts": {
-    "mtime": 1794169911470.0728,
-    "hash": "5eee94175ce11d888aaf47009b815853"
+    "mtime": 1794190840778.655,
+    "hash": "f81b12a3ec06dc3a7a2ecb1784f2a442"
   },
   "frontend/src/api/categories.ts": {
     "mtime": 1794169911470.1294,
@@ -1412,8 +1412,8 @@
     "hash": "d0f189b4c01ec205385eca215af98df1"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
-    "mtime": 1794169911489.2263,
-    "hash": "6ee3c4a63497e086952342d4d7ffa1b1"
+    "mtime": 1794190840779.0205,
+    "hash": "aa006be871b8bd18a583382896762ee7"
   },
   "frontend/src/views/protected/CompaniesPage.tsx": {
     "mtime": 1794169911489.3557,
@@ -1440,8 +1440,8 @@
     "hash": "49dcd300521a083b25cab5685b6ffd18"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1794169970848.8962,
-    "hash": "ecb14e147d457bf4e30fad1a4e9e0c55"
+    "mtime": 1794201875888.5054,
+    "hash": "c6b2de79c832c222a5f6bdcfc4975658"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1794181304440.8015,
@@ -1496,8 +1496,8 @@
     "hash": "57fe8c7c47690d91313074ef79e0e8da"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1794182039022.1414,
-    "hash": "eb5a7689c8058d593d762e69a80c4958"
+    "mtime": 1794192083245.3677,
+    "hash": "7814e9683b92fa87b02054fc77b74071"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1794169911493.37,
@@ -1624,8 +1624,8 @@
     "hash": "ada9675774fa6c19a3e6faf9a88e819e"
   },
   "tests/test_allocation_policy_api.py": {
-    "mtime": 1794169911509.5579,
-    "hash": "c9236f6ba1ac3fc2af1841e52a104f7f"
+    "mtime": 1794192196367.7434,
+    "hash": "a1d2f3775e3ae31bd4c22b0d6837b22a"
   },
   "tests/test_allocation_policy_service.py": {
     "mtime": 1794169911509.6826,
@@ -1652,7 +1652,7 @@
     "hash": "c33927508780ea5fbf22addd64abfb1b"
   },
   "tests/test_analytics_contracts.py": {
-    "mtime": 1794169911510.3499,
+    "mtime": 1794192258724.21,
     "hash": "0bc23f4d71acb6e8976a54dd6b04f77c"
   },
   "tests/test_analytics_facts.py": {
@@ -1696,12 +1696,12 @@
     "hash": "fc2ad8ff5a8d34f6108d22cc31011504"
   },
   "tests/test_cash_register_api.py": {
-    "mtime": 1794169911512.7297,
-    "hash": "d0d77c14308b03705124e960da65cdb3"
+    "mtime": 1794190840779.3599,
+    "hash": "16e7a44f330cbb3a2080cf27b760a7ca"
   },
   "tests/test_cash_register_service.py": {
-    "mtime": 1794169911512.8877,
-    "hash": "fad5f407e3e31d3efa99a09463b9886b"
+    "mtime": 1794190840779.531,
+    "hash": "4073a9077a61f91f7fcc4f722751b348"
   },
   "tests/test_cassandra_timeseries.py": {
     "mtime": 1794169911513.195,
@@ -2024,8 +2024,8 @@
     "hash": "08d90bc7bd176be43397dd5025d6c0a6"
   },
   "tests/test_v72_change_dates.py": {
-    "mtime": 1794169911535.9875,
-    "hash": "e11b83399e0cdf05e22e95e886fc1d85"
+    "mtime": 1794195983206.257,
+    "hash": "79dd028e58cbefc57a1bdb8bda76348b"
   },
   "tests/test_v72_checkin_gate.py": {
     "mtime": 1794169911536.0693,
@@ -2092,115 +2092,115 @@
     "hash": "13c075762304f5bf61c5183f56910cf4"
   },
   ".claude/agents/architecture-reviewer.md": {
-    "mtime": 1794112849380.4402,
+    "mtime": 1794169911317.599,
     "hash": "0e3741f5fd317621c4b4e6dadfdbdbc5"
   },
   ".claude/agents/backend-engineer.md": {
-    "mtime": 1794112849380.5193,
+    "mtime": 1794169911317.6716,
     "hash": "d9ecf606f106908cfbe99848159b83fb"
   },
   ".claude/agents/database-migrations.md": {
-    "mtime": 1794112849380.862,
+    "mtime": 1794169911317.8984,
     "hash": "fb17089c4f89250c4e25a71bf1bfc07c"
   },
   ".claude/agents/docs-writer.md": {
-    "mtime": 1794112849380.9846,
+    "mtime": 1794169911317.9893,
     "hash": "9b948346884c2dfde996c7663a85d97b"
   },
   ".claude/agents/frontend-engineer.md": {
-    "mtime": 1794112849381.0425,
+    "mtime": 1794169911318.0476,
     "hash": "54ea36eb497d6ad7ff54a0fbaa7f113e"
   },
   ".claude/agents/performance-analyst.md": {
-    "mtime": 1794112849381.314,
+    "mtime": 1794169911318.2659,
     "hash": "d9fcdafa1e751ed6041b32c791ee8554"
   },
   ".claude/agents/qa-testing.md": {
-    "mtime": 1794112849381.427,
+    "mtime": 1794169911318.376,
     "hash": "503a0453b0d5ddd90183c7461218c732"
   },
   ".claude/agents/security-auditor.md": {
-    "mtime": 1794112849381.6309,
+    "mtime": 1794169911318.481,
     "hash": "46c9b4b5a2e5608a22877d1be8b991ef"
   },
   ".codex_prompts/d1.txt": {
-    "mtime": 1794112849386.2366,
+    "mtime": 1794169911325.7153,
     "hash": "51da59e8e6fd7817b82d5aef4136a88e"
   },
   ".codex_prompts/d2.txt": {
-    "mtime": 1794112849386.2864,
+    "mtime": 1794169911325.7795,
     "hash": "e4728e544694b957d3eb65361f5cbb09"
   },
   ".codex_prompts/d3.txt": {
-    "mtime": 1794112849386.3372,
+    "mtime": 1794169911325.8337,
     "hash": "56506cee96f5a86385f52eda3033bd29"
   },
   ".codex_prompts/e2e.txt": {
-    "mtime": 1794112849386.3909,
+    "mtime": 1794169911325.897,
     "hash": "758c3b6cc09ae41d809740ad0c1b5230"
   },
   ".codex_prompts/fe-a.txt": {
-    "mtime": 1794112849386.4434,
+    "mtime": 1794169911326.033,
     "hash": "5a1b536006066e832270c63fb85897b3"
   },
   ".codex_prompts/fe-b.txt": {
-    "mtime": 1794112849386.49,
+    "mtime": 1794169911326.124,
     "hash": "6f450f11836495579f5e7f97ed978d5d"
   },
   ".codex_prompts/fe-c.txt": {
-    "mtime": 1794112849386.541,
+    "mtime": 1794169911326.183,
     "hash": "92ea55c380c950f53f2da2b64c6de2fa"
   },
   ".codex_prompts/matrix.txt": {
-    "mtime": 1794112849386.6763,
+    "mtime": 1794169911326.2463,
     "hash": "b7e6daac319d31ff0f53ea8d3c312c75"
   },
   ".codex_prompts/perf.txt": {
-    "mtime": 1794112849386.7292,
+    "mtime": 1794169911326.3066,
     "hash": "15b3d6770098b010807524dc006dd808"
   },
   ".codex_prompts/s02.txt": {
-    "mtime": 1794112849386.7876,
+    "mtime": 1794169911326.366,
     "hash": "28bdd32a90829d4b017d8b2fb6cfb251"
   },
   ".codex_prompts/s03.txt": {
-    "mtime": 1794112849386.8396,
+    "mtime": 1794169911326.4265,
     "hash": "ff70a87ad8e54f3bcf188597b9ecd1b6"
   },
   ".codex_prompts/s04.txt": {
-    "mtime": 1794112849386.889,
+    "mtime": 1794169911326.4915,
     "hash": "cba2bb9740eecf48c75fd2a506ea6da4"
   },
   ".codex_prompts/s05.txt": {
-    "mtime": 1794112849386.943,
+    "mtime": 1794169911326.5596,
     "hash": "ad3d6794321c8df917bd907930e5812b"
   },
   ".codex_prompts/s06.txt": {
-    "mtime": 1794112849386.9966,
+    "mtime": 1794169911326.6194,
     "hash": "7b16815c5ba2f1ebe722de64a96b4ab1"
   },
   ".codex_prompts/s08.txt": {
-    "mtime": 1794112849387.0513,
+    "mtime": 1794169911326.6816,
     "hash": "b9501f34a05a406e938605124646b028"
   },
   ".codex_prompts/s09.txt": {
-    "mtime": 1794112849387.1025,
+    "mtime": 1794169911326.743,
     "hash": "f344ea8c350bc0ef1a8b02355808b1ec"
   },
   ".codex_prompts/s10.txt": {
-    "mtime": 1794112849387.1536,
+    "mtime": 1794169911326.8022,
     "hash": "0c05b4a8bec691e13b1ce47709367c29"
   },
   ".codex_prompts/s11.txt": {
-    "mtime": 1794112849387.201,
+    "mtime": 1794169911326.862,
     "hash": "d40185b2e428a5a282ddbb4470561d59"
   },
   ".codex_prompts/s12.txt": {
-    "mtime": 1794112849387.251,
+    "mtime": 1794169911326.9214,
     "hash": "22648c4abec837a8b13d1eadffa033cf"
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1794112849387.783,
+    "mtime": 1794169911327.46,
     "hash": "78c740d5c45369649528ed5c4f6824a4"
   },
   "AGENTS.md": {
@@ -2764,28 +2764,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1794182174317.9087,
-    "hash": "bd1e4855a1f2ea25bccd99040a39d841"
+    "mtime": 1794201660196.8267,
+    "hash": "20fca111c1e92c162d828e8bc5118af2"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1794182173600.313,
-    "hash": "93f92caeeeb780baa941e6e348dc4356"
+    "mtime": 1794201659441.0215,
+    "hash": "b0a26c2027ab420b5aa759043e4580a2"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1794182174306.2095,
-    "hash": "11fe1d3f92665f7fc221e38ab4ae2774"
+    "mtime": 1794201660185.1865,
+    "hash": "8e2dc83776cc9a6d2d91f4c0455db69f"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1794182173612.7246,
-    "hash": "f4929da0c7f0dbc8c79e08eab5982b3e"
+    "mtime": 1794201659454.1973,
+    "hash": "9f773fc125abc839f07989ed72c09857"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1794182174293.5115,
-    "hash": "bb4b33189750235b6eb58aad651a12bd"
+    "mtime": 1794201660172.525,
+    "hash": "e9ad9656f485853734f40e48aebfddb5"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1794182173799.9866,
-    "hash": "c7cb2f081715a1a539f5d67cbcae3974"
+    "mtime": 1794201659660.293,
+    "hash": "9a48b9c10542214867f74a80ed6c7993"
   },
   "qa/evidence/README.md": {
     "mtime": 1794169911499.7566,
@@ -2868,368 +2868,368 @@
     "hash": "588fb14e8c7e9de54b6ccc316488e5e3"
   },
   ".githooks/pre-commit": {
-    "mtime": 1794112849387.5527,
+    "mtime": 1794169911327.2915,
     "hash": "b0e1dc60969ccd5590d47ca33bfec963"
   },
   ".agents/skills/agent-setup-maintenance/SKILL.md": {
-    "mtime": 1794112849376.165,
+    "mtime": 1794169911314.0476,
     "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
   },
   ".agents/skills/agent-setup-maintenance/agents/openai.yaml": {
-    "mtime": 1794112849376.2803,
+    "mtime": 1794169911314.1401,
     "hash": "967cc804617e0c6daf9d6c7a10b429dd"
   },
   ".agents/skills/cloud-user-qa/SKILL.md": {
-    "mtime": 1794112849376.379,
+    "mtime": 1794169911314.2222,
     "hash": "78e68f7386e3788b82ec93105c4d356a"
   },
   ".agents/skills/cloud-user-qa/agents/openai.yaml": {
-    "mtime": 1794112849376.4634,
+    "mtime": 1794169911314.3032,
     "hash": "16edeff38c514d364477c4f7aeb21532"
   },
   ".agents/skills/data-visualization-review/SKILL.md": {
-    "mtime": 1794112849376.5518,
+    "mtime": 1794169911314.3892,
     "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
   },
   ".agents/skills/data-visualization-review/agents/openai.yaml": {
-    "mtime": 1794112849376.6345,
+    "mtime": 1794169911314.4873,
     "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
   },
   ".agents/skills/deploy-preview-check/SKILL.md": {
-    "mtime": 1794112849376.734,
+    "mtime": 1794169911314.5989,
     "hash": "26741e1bdc585eb15ce227d6350412c3"
   },
   ".agents/skills/deploy-preview-check/agents/openai.yaml": {
-    "mtime": 1794112849376.8174,
+    "mtime": 1794169911314.6982,
     "hash": "9c09b9e7d1e31d25383e03d43df00004"
   },
   ".agents/skills/dev-up/SKILL.md": {
-    "mtime": 1794112849376.9116,
+    "mtime": 1794169911314.7869,
     "hash": "d01e498577d0a42aef6f05fdb5682797"
   },
   ".agents/skills/geo-local-seo/SKILL.md": {
-    "mtime": 1794112849377.0063,
+    "mtime": 1794169911314.8743,
     "hash": "f4086f1839ebd3d8ff6aa761b451266b"
   },
   ".agents/skills/geo-local-seo/agents/openai.yaml": {
-    "mtime": 1794112849377.0942,
+    "mtime": 1794169911314.9558,
     "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
   },
   ".agents/skills/geo-market-expansion/SKILL.md": {
-    "mtime": 1794112849377.1746,
+    "mtime": 1794169911315.0435,
     "hash": "1ba813def89bdd26e0e501da3ae4f4be"
   },
   ".agents/skills/geo-market-expansion/agents/openai.yaml": {
-    "mtime": 1794112849377.2551,
+    "mtime": 1794169911315.1208,
     "hash": "4a3802b6ad3354acdb57f69706e6772b"
   },
   ".agents/skills/graphify-load-context/SKILL.md": {
-    "mtime": 1794112849377.3477,
+    "mtime": 1794169911315.2014,
     "hash": "837f1d137040339a77ce4afc9cb44d91"
   },
   ".agents/skills/graphify-load-context/agents/openai.yaml": {
-    "mtime": 1794112849377.4292,
+    "mtime": 1794169911315.2915,
     "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
   },
   ".agents/skills/graphify-read/SKILL.md": {
-    "mtime": 1794112849377.5154,
+    "mtime": 1794169911315.3745,
     "hash": "93eaff240ba760e7a58369ec602a21df"
   },
   ".agents/skills/graphify-read/agents/openai.yaml": {
-    "mtime": 1794112849377.6025,
+    "mtime": 1794169911315.4507,
     "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
   },
   ".agents/skills/graphify-write/SKILL.md": {
-    "mtime": 1794112849377.71,
+    "mtime": 1794169911315.5315,
     "hash": "720d5e5ead4eed1979606befbf315dc7"
   },
   ".agents/skills/graphify-write/agents/openai.yaml": {
-    "mtime": 1794112849377.8066,
+    "mtime": 1794169911315.6074,
     "hash": "fd786dd876b32162a80ffef4897bbe6d"
   },
   ".agents/skills/incident-triage/SKILL.md": {
-    "mtime": 1794112849377.9092,
+    "mtime": 1794169911315.6887,
     "hash": "e8232fcae72793a1c70659cc6d25f034"
   },
   ".agents/skills/incident-triage/agents/openai.yaml": {
-    "mtime": 1794112849378.0142,
+    "mtime": 1794169911315.7666,
     "hash": "2401b878bced3e59222d60a75ab15379"
   },
   ".agents/skills/new-migration/SKILL.md": {
-    "mtime": 1794112849378.1223,
+    "mtime": 1794169911315.8599,
     "hash": "1bcdd99c2cb3569a63526ae2c493d3f7"
   },
   ".agents/skills/obsidian-load-context/SKILL.md": {
-    "mtime": 1794112849378.357,
+    "mtime": 1794169911316.0386,
     "hash": "c50670fe8d18a5aa9e195eada79372ba"
   },
   ".agents/skills/obsidian-load-context/agents/openai.yaml": {
-    "mtime": 1794112849378.458,
+    "mtime": 1794169911316.117,
     "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
   },
   ".agents/skills/obsidian-read/SKILL.md": {
-    "mtime": 1794112849378.5625,
+    "mtime": 1794169911316.1953,
     "hash": "9470db7fda22e6d964a607fc5ee70090"
   },
   ".agents/skills/obsidian-read/agents/openai.yaml": {
-    "mtime": 1794112849378.6692,
+    "mtime": 1794169911316.268,
     "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
   },
   ".agents/skills/obsidian-write/SKILL.md": {
-    "mtime": 1794112849378.7747,
+    "mtime": 1794169911316.3496,
     "hash": "503e5069808b768535a56804ad700c4f"
   },
   ".agents/skills/obsidian-write/agents/openai.yaml": {
-    "mtime": 1794112849378.8687,
+    "mtime": 1794169911316.4285,
     "hash": "32c48a2dd7379797c8ba4d096459915e"
   },
   ".agents/skills/product-ceo-review/SKILL.md": {
-    "mtime": 1794112849378.962,
+    "mtime": 1794169911316.5083,
     "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
   },
   ".agents/skills/product-ceo-review/agents/openai.yaml": {
-    "mtime": 1794112849379.0632,
+    "mtime": 1794169911316.5828,
     "hash": "638c5975d1325000228d3391a597df79"
   },
   ".agents/skills/qa-persona-bootstrap/SKILL.md": {
-    "mtime": 1794112849379.1746,
+    "mtime": 1794169911316.6624,
     "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
   },
   ".agents/skills/qa-persona-bootstrap/agents/openai.yaml": {
-    "mtime": 1794112849379.2695,
+    "mtime": 1794169911316.736,
     "hash": "bdd2b69a7803613ec60e869562cdf3dd"
   },
   ".agents/skills/release-gate/SKILL.md": {
-    "mtime": 1794112849379.362,
+    "mtime": 1794169911316.8167,
     "hash": "3c19144a1a25364f0cafef71eba4e5fe"
   },
   ".agents/skills/release-gate/agents/openai.yaml": {
-    "mtime": 1794112849379.4556,
+    "mtime": 1794169911316.8916,
     "hash": "c61c9bc51a06623481ad199db2ceed4a"
   },
   ".agents/skills/secure-integration-review/SKILL.md": {
-    "mtime": 1794112849379.8198,
+    "mtime": 1794169911317.151,
     "hash": "850e46270104bd6bd1492c55c901e350"
   },
   ".agents/skills/secure-integration-review/agents/openai.yaml": {
-    "mtime": 1794112849379.935,
+    "mtime": 1794169911317.2268,
     "hash": "1462dbf4e00ea39db479341556a170db"
   },
   ".agents/skills/ux-ui-audit/SKILL.md": {
-    "mtime": 1794112849380.046,
+    "mtime": 1794169911317.3022,
     "hash": "0f2359a751e2ab26ef41d243e5887ede"
   },
   ".agents/skills/ux-ui-audit/agents/openai.yaml": {
-    "mtime": 1794112849380.1575,
+    "mtime": 1794169911317.3801,
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".agents/skills/validate-all/SKILL.md": {
-    "mtime": 1794112849380.2778,
+    "mtime": 1794169911317.4722,
     "hash": "5ea4d77ae49dcdc77cd205b532140886"
   },
   ".claude/agents/cloud-qa-user.md": {
-    "mtime": 1794112849380.605,
+    "mtime": 1794169911317.7349,
     "hash": "25376628e28d4a0f2729404eb80533f6"
   },
   ".claude/agents/data-visualization.md": {
-    "mtime": 1794112849380.7695,
+    "mtime": 1794169911317.8413,
     "hash": "dcb14acb57a63d784c3f63291c848515"
   },
   ".claude/agents/devops-containers.md": {
-    "mtime": 1794112849380.9255,
+    "mtime": 1794169911317.9436,
     "hash": "a23f66cd18a7a37479095ca336985940"
   },
   ".claude/agents/geo-local-seo.md": {
-    "mtime": 1794112849381.1096,
+    "mtime": 1794169911318.1033,
     "hash": "4d2cebbe5f90d4bfb358d5139f7c2d0f"
   },
   ".claude/agents/geo-market-expansion.md": {
-    "mtime": 1794112849381.1785,
+    "mtime": 1794169911318.1655,
     "hash": "285b124eec2cc1e0dee0effdbb7c8488"
   },
   ".claude/agents/knowledge-graph-curator.md": {
-    "mtime": 1794112849381.2397,
+    "mtime": 1794169911318.216,
     "hash": "b7e872144d1a41f44a20bd114ec4d3c4"
   },
   ".claude/agents/product-ceo.md": {
-    "mtime": 1794112849381.3738,
+    "mtime": 1794169911318.3188,
     "hash": "76a9671b04bb6eb2cb8b06de2797e745"
   },
   ".claude/agents/release-governor.md": {
-    "mtime": 1794112849381.581,
+    "mtime": 1794169911318.428,
     "hash": "39aa2d54b0764935d1a3aebe7f76816b"
   },
   ".claude/agents/ux-ui-auditor.md": {
-    "mtime": 1794112849381.6838,
+    "mtime": 1794169911318.532,
     "hash": "ef35735d034a51a2252fec9bb768a97b"
   },
   ".claude/skills/agent-setup-maintenance/SKILL.md": {
-    "mtime": 1794112849381.883,
+    "mtime": 1794169911318.7515,
     "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
   },
   ".claude/skills/agent-setup-maintenance/agents/openai.yaml": {
-    "mtime": 1794112849381.9592,
+    "mtime": 1794169911318.8281,
     "hash": "967cc804617e0c6daf9d6c7a10b429dd"
   },
   ".claude/skills/cloud-user-qa/SKILL.md": {
-    "mtime": 1794112849382.0342,
+    "mtime": 1794169911318.8987,
     "hash": "78e68f7386e3788b82ec93105c4d356a"
   },
   ".claude/skills/cloud-user-qa/agents/openai.yaml": {
-    "mtime": 1794112849382.111,
+    "mtime": 1794169911318.9778,
     "hash": "16edeff38c514d364477c4f7aeb21532"
   },
   ".claude/skills/data-visualization-review/SKILL.md": {
-    "mtime": 1794112849382.1924,
+    "mtime": 1794169911319.0605,
     "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
   },
   ".claude/skills/data-visualization-review/agents/openai.yaml": {
-    "mtime": 1794112849382.2654,
+    "mtime": 1794169911319.1348,
     "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
   },
   ".claude/skills/deploy-preview-check/SKILL.md": {
-    "mtime": 1794112849382.3376,
+    "mtime": 1794169911319.212,
     "hash": "26741e1bdc585eb15ce227d6350412c3"
   },
   ".claude/skills/deploy-preview-check/agents/openai.yaml": {
-    "mtime": 1794112849382.413,
+    "mtime": 1794169911319.3042,
     "hash": "9c09b9e7d1e31d25383e03d43df00004"
   },
   ".claude/skills/dev-up/SKILL.md": {
-    "mtime": 1794112849382.4968,
+    "mtime": 1794169911319.3994,
     "hash": "d01e498577d0a42aef6f05fdb5682797"
   },
   ".claude/skills/geo-local-seo/SKILL.md": {
-    "mtime": 1794112849382.5708,
+    "mtime": 1794169911319.4873,
     "hash": "f4086f1839ebd3d8ff6aa761b451266b"
   },
   ".claude/skills/geo-local-seo/agents/openai.yaml": {
-    "mtime": 1794112849382.6455,
+    "mtime": 1794169911319.5754,
     "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
   },
   ".claude/skills/geo-market-expansion/SKILL.md": {
-    "mtime": 1794112849382.727,
+    "mtime": 1794169911319.6707,
     "hash": "1ba813def89bdd26e0e501da3ae4f4be"
   },
   ".claude/skills/geo-market-expansion/agents/openai.yaml": {
-    "mtime": 1794112849382.7983,
+    "mtime": 1794169911319.7603,
     "hash": "4a3802b6ad3354acdb57f69706e6772b"
   },
   ".claude/skills/graphify-load-context/SKILL.md": {
-    "mtime": 1794112849382.8733,
+    "mtime": 1794169911319.854,
     "hash": "837f1d137040339a77ce4afc9cb44d91"
   },
   ".claude/skills/graphify-load-context/agents/openai.yaml": {
-    "mtime": 1794112849382.9475,
+    "mtime": 1794169911319.949,
     "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
   },
   ".claude/skills/graphify-read/SKILL.md": {
-    "mtime": 1794112849383.023,
+    "mtime": 1794169911320.041,
     "hash": "93eaff240ba760e7a58369ec602a21df"
   },
   ".claude/skills/graphify-read/agents/openai.yaml": {
-    "mtime": 1794112849383.0928,
+    "mtime": 1794169911320.1282,
     "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
   },
   ".claude/skills/graphify-write/SKILL.md": {
-    "mtime": 1794112849383.167,
+    "mtime": 1794169911320.2197,
     "hash": "720d5e5ead4eed1979606befbf315dc7"
   },
   ".claude/skills/graphify-write/agents/openai.yaml": {
-    "mtime": 1794112849383.244,
+    "mtime": 1794169911320.31,
     "hash": "fd786dd876b32162a80ffef4897bbe6d"
   },
   ".claude/skills/incident-triage/SKILL.md": {
-    "mtime": 1794112849383.3152,
+    "mtime": 1794169911320.4033,
     "hash": "e8232fcae72793a1c70659cc6d25f034"
   },
   ".claude/skills/incident-triage/agents/openai.yaml": {
-    "mtime": 1794112849383.386,
+    "mtime": 1794169911320.4922,
     "hash": "2401b878bced3e59222d60a75ab15379"
   },
   ".claude/skills/new-migration/SKILL.md": {
-    "mtime": 1794112849383.4592,
+    "mtime": 1794169911320.5894,
     "hash": "1bcdd99c2cb3569a63526ae2c493d3f7"
   },
   ".claude/skills/obsidian-load-context/SKILL.md": {
-    "mtime": 1794112849383.6245,
+    "mtime": 1794169911320.776,
     "hash": "c50670fe8d18a5aa9e195eada79372ba"
   },
   ".claude/skills/obsidian-load-context/agents/openai.yaml": {
-    "mtime": 1794112849383.7058,
+    "mtime": 1794169911320.85,
     "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
   },
   ".claude/skills/obsidian-read/SKILL.md": {
-    "mtime": 1794112849383.7825,
+    "mtime": 1794169911320.925,
     "hash": "9470db7fda22e6d964a607fc5ee70090"
   },
   ".claude/skills/obsidian-read/agents/openai.yaml": {
-    "mtime": 1794112849383.8523,
+    "mtime": 1794169911320.998,
     "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
   },
   ".claude/skills/obsidian-write/SKILL.md": {
-    "mtime": 1794112849383.9268,
+    "mtime": 1794169911321.0696,
     "hash": "503e5069808b768535a56804ad700c4f"
   },
   ".claude/skills/obsidian-write/agents/openai.yaml": {
-    "mtime": 1794112849384.001,
+    "mtime": 1794169911321.1484,
     "hash": "32c48a2dd7379797c8ba4d096459915e"
   },
   ".claude/skills/product-ceo-review/SKILL.md": {
-    "mtime": 1794112849384.0803,
+    "mtime": 1794169911321.222,
     "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
   },
   ".claude/skills/product-ceo-review/agents/openai.yaml": {
-    "mtime": 1794112849384.1511,
+    "mtime": 1794169911321.295,
     "hash": "638c5975d1325000228d3391a597df79"
   },
   ".claude/skills/qa-persona-bootstrap/SKILL.md": {
-    "mtime": 1794112849384.2258,
+    "mtime": 1794169911321.3782,
     "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
   },
   ".claude/skills/qa-persona-bootstrap/agents/openai.yaml": {
-    "mtime": 1794112849384.3054,
+    "mtime": 1794169911321.4507,
     "hash": "bdd2b69a7803613ec60e869562cdf3dd"
   },
   ".claude/skills/release-gate/SKILL.md": {
-    "mtime": 1794112849384.3755,
+    "mtime": 1794169911321.5264,
     "hash": "3c19144a1a25364f0cafef71eba4e5fe"
   },
   ".claude/skills/release-gate/agents/openai.yaml": {
-    "mtime": 1794112849384.4463,
+    "mtime": 1794169911321.598,
     "hash": "c61c9bc51a06623481ad199db2ceed4a"
   },
   ".claude/skills/secure-integration-review/SKILL.md": {
-    "mtime": 1794112849384.684,
+    "mtime": 1794169911321.837,
     "hash": "850e46270104bd6bd1492c55c901e350"
   },
   ".claude/skills/secure-integration-review/agents/openai.yaml": {
-    "mtime": 1794112849384.7578,
+    "mtime": 1794169911321.9094,
     "hash": "1462dbf4e00ea39db479341556a170db"
   },
   ".claude/skills/ux-ui-audit/SKILL.md": {
-    "mtime": 1794112849384.8337,
+    "mtime": 1794169911321.9834,
     "hash": "0f2359a751e2ab26ef41d243e5887ede"
   },
   ".claude/skills/ux-ui-audit/agents/openai.yaml": {
-    "mtime": 1794112849384.903,
+    "mtime": 1794169911322.0564,
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".claude/skills/validate-all/SKILL.md": {
-    "mtime": 1794112849384.9807,
+    "mtime": 1794169911322.1345,
     "hash": "5ea4d77ae49dcdc77cd205b532140886"
   },
   ".github/workflows/preview-qa.yml": {
-    "mtime": 1794112849387.8337,
+    "mtime": 1794169911327.5256,
     "hash": "a5db00a785715735373e036c50a4cfa7"
   },
   ".github/workflows/release-gate.yml": {
-    "mtime": 1794112849387.8894,
+    "mtime": 1794169911327.5918,
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1794120882475.6182,
-    "hash": "3e85baeddc40563bab42a43a2607f9d8"
+    "mtime": 1794198523378.2534,
+    "hash": "9c594fd32c111ee6924a949937d8f425"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1794169911503.7908,
@@ -3360,31 +3360,31 @@
     "hash": "51e567e09b31e73480c5c5758b37ad9e"
   },
   ".agents/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1794112849379.5762,
+    "mtime": 1794169911316.9878,
     "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".agents/skills/scale-data-architecture/agents/openai.yaml": {
-    "mtime": 1794112849379.6902,
+    "mtime": 1794169911317.0684,
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".claude/agents/data-architecture-specialist.md": {
-    "mtime": 1794112849380.681,
+    "mtime": 1794169911317.7908,
     "hash": "c7a5b78381b8855ce88b853b56376705"
   },
   ".claude/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1794112849384.5342,
+    "mtime": 1794169911321.6892,
     "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".claude/skills/scale-data-architecture/agents/openai.yaml": {
-    "mtime": 1794112849384.6113,
+    "mtime": 1794169911321.7634,
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".github/workflows/trusted-release-gate.yml": {
-    "mtime": 1794112849387.933,
+    "mtime": 1794169911327.649,
     "hash": "638aed49f9d59e3157be921f6fc62a28"
   },
   ".github/workflows/verify-preview-providers.yml": {
-    "mtime": 1794112849387.9941,
+    "mtime": 1794169911327.72,
     "hash": "19751bdd0abb4802c14eaf5bc1ae0d3f"
   },
   "app/services/analytics_freshness.py": {
@@ -3500,8 +3500,8 @@
     "hash": "316e05345a06b6b13524694a374513ba"
   },
   "frontend/e2e/analytics-success.spec.ts": {
-    "mtime": 1794184316216.014,
-    "hash": "b8a68e7db79f560bcabd78afa5d9b98d"
+    "mtime": 1794192083244.9314,
+    "hash": "3ed197ea14a3c45102d793a1cdd6954a"
   },
   "frontend/e2e/guest-companion-journey.spec.ts": {
     "mtime": 1794169911417.6113,
@@ -3680,8 +3680,8 @@
     "hash": "2f3b82c0c14d6715d1dd15ff50fb13cc"
   },
   "frontend/src/views/protected/OccupancyPlanningPage.tsx": {
-    "mtime": 1794169911490.2769,
-    "hash": "3a429067e2e33529a091b5f67068eb31"
+    "mtime": 1794199240951.6682,
+    "hash": "7493a7e755145abb562258cc81ef6684"
   },
   "tests/test_occupancy_grid.py": {
     "mtime": 1794169911523.9363,
@@ -4124,8 +4124,8 @@
     "hash": "dcb6e0904c11e29ae3863b5d284e0918"
   },
   "frontend/e2e/promotions-builder.spec.ts": {
-    "mtime": 1794169911421.0876,
-    "hash": "730763de8d3d080b5319b3775daf4878"
+    "mtime": 1794195647099.2537,
+    "hash": "e7d41474b382333be16f59602353a12e"
   },
   "frontend/e2e/settings-notifications.spec.ts": {
     "mtime": 1794169911423.386,
@@ -4224,8 +4224,8 @@
     "hash": "0617a2b50e77ea03918dcb7f75657670"
   },
   "frontend/src/views/protected/PromotionsPage.tsx": {
-    "mtime": 1794169911490.6196,
-    "hash": "c3e234425e8f0e387e8c67ae19606f5e"
+    "mtime": 1794195647099.6182,
+    "hash": "1bae22c20e754f0e04ec0d2ba17fc53f"
   },
   "frontend/src/views/protected/SettingsNotificationsPage.tsx": {
     "mtime": 1794169911492.1228,
@@ -4604,7 +4604,7 @@
     "hash": "5833186f454658746aecf18237842072"
   },
   ".superpowers/sdd/mobile-first-operations-implementation/task-1a-report.md": {
-    "mtime": 1794112849391.39,
+    "mtime": 1794169911331.2368,
     "hash": "ba7407f156b9b08c598a9c44b4e77531"
   },
   "alembic/versions/20260820_user_sessions.py": {
@@ -4908,11 +4908,11 @@
     "hash": "ebbb2aa3b2d32673780b1e73639f2f25"
   },
   ".agents/skills/new-permission/SKILL.md": {
-    "mtime": 1794112849378.2485,
+    "mtime": 1794169911315.9536,
     "hash": "8f7289123368dadf9b94df48a80d243b"
   },
   ".claude/skills/new-permission/SKILL.md": {
-    "mtime": 1794112849383.55,
+    "mtime": 1794169911320.692,
     "hash": "8f7289123368dadf9b94df48a80d243b"
   },
   "alembic/versions/20260830_room_move_tiers.py": {
@@ -4944,8 +4944,8 @@
     "hash": "90a7375185697fbd0cd57dc10af5230d"
   },
   "tests/test_allocation_guest_room_avoidance.py": {
-    "mtime": 1794169911509.2566,
-    "hash": "62d40bd9925f7e5b8cf1dbd93ae5115a"
+    "mtime": 1794192083262.5999,
+    "hash": "0987dae39be291c8553a365b63d6148b"
   },
   "tests/test_guest_room_avoidance_api.py": {
     "mtime": 1794169911519.314,
@@ -5052,8 +5052,8 @@
     "hash": "8d26a8d22a9a9010533de7a831112f41"
   },
   "app/services/collaboration.py": {
-    "mtime": 1794169911362.4443,
-    "hash": "41feea1a20cf80da4f4d6cfc22b4c4c5"
+    "mtime": 1794189600498.0862,
+    "hash": "696fab68cdd28a97dc852ee98355222e"
   },
   "app/services/object_storage.py": {
     "mtime": 1794169911365.9226,
@@ -5156,59 +5156,59 @@
     "hash": "27b01eac7f58324707c831a8ff459f76"
   },
   ".superpowers/sdd/TECH-0140-plan/progress.md": {
-    "mtime": 1794112849390.5442,
+    "mtime": 1794169911330.3835,
     "hash": "13a52ca1b268c12f3c5d34a0fa8c4781"
   },
   ".superpowers/sdd/TECH-0140-plan/task-0-report.md": {
-    "mtime": 1794112849390.605,
+    "mtime": 1794169911330.4424,
     "hash": "ffb06943f44f53c6623eb4bd52a229e9"
   },
   ".superpowers/sdd/TECH-0140-plan/task-1-report.md": {
-    "mtime": 1794112849390.656,
+    "mtime": 1794169911330.4956,
     "hash": "7c433745935d61fe11aeb922891371ce"
   },
   ".superpowers/sdd/TECH-0140-plan/task-10-report.md": {
-    "mtime": 1794112849390.7068,
+    "mtime": 1794169911330.5452,
     "hash": "aa9d8caa81548f4a869a2bf369dff3b4"
   },
   ".superpowers/sdd/TECH-0140-plan/task-11-report.md": {
-    "mtime": 1794112849390.7588,
+    "mtime": 1794169911330.5928,
     "hash": "66af8641080b9c6a90b75bb2e7ff8616"
   },
   ".superpowers/sdd/TECH-0140-plan/task-12-report.md": {
-    "mtime": 1794112849390.811,
+    "mtime": 1794169911330.6433,
     "hash": "74f074998ff91fbb40605f77c8ce229d"
   },
   ".superpowers/sdd/TECH-0140-plan/task-13-report.md": {
-    "mtime": 1794112849390.867,
+    "mtime": 1794169911330.703,
     "hash": "50ba8b12c829a12370f775428b13e0c7"
   },
   ".superpowers/sdd/TECH-0140-plan/task-3-report.md": {
-    "mtime": 1794112849390.9224,
+    "mtime": 1794169911330.761,
     "hash": "daecd9a7932b480b81ba3b455a6150fc"
   },
   ".superpowers/sdd/TECH-0140-plan/task-4-report.md": {
-    "mtime": 1794112849390.9807,
+    "mtime": 1794169911330.8113,
     "hash": "af8d478e12df1811215ad3714910c6cd"
   },
   ".superpowers/sdd/TECH-0140-plan/task-5-report.md": {
-    "mtime": 1794112849391.0366,
+    "mtime": 1794169911330.8718,
     "hash": "e4eae11599e1d3008a7535c6948b1e37"
   },
   ".superpowers/sdd/TECH-0140-plan/task-6-report.md": {
-    "mtime": 1794112849391.0923,
+    "mtime": 1794169911330.9392,
     "hash": "902d3652f10ca5c90e6a2c1393770728"
   },
   ".superpowers/sdd/TECH-0140-plan/task-7-report.md": {
-    "mtime": 1794112849391.154,
+    "mtime": 1794169911330.9941,
     "hash": "c2c1f13b317915424259b177743853fe"
   },
   ".superpowers/sdd/TECH-0140-plan/task-8-report.md": {
-    "mtime": 1794112849391.21,
+    "mtime": 1794169911331.0522,
     "hash": "aaa5f555c067891bc06b0a670ee4b930"
   },
   ".superpowers/sdd/TECH-0140-plan/task-9-report.md": {
-    "mtime": 1794112849391.2673,
+    "mtime": 1794169911331.1064,
     "hash": "074969d35bfa36f44b75fca4e63e6203"
   },
   "docs/frontend-i18n.md": {
@@ -5276,8 +5276,8 @@
     "hash": "19b8bf28e3ce03516a72d7c9328d18ac"
   },
   "docs/operations/audit-and-cash-daily.md": {
-    "mtime": 1794169942816.345,
-    "hash": "cf0d47fe4266de2eede90714468b82b6"
+    "mtime": 1794190840777.81,
+    "hash": "6bc66f69baf9d636148a51ee31afae93"
   },
   "alembic/versions/20260910_operational_tasks_handoff.py": {
     "mtime": 1794169911338.097,
@@ -5996,8 +5996,8 @@
     "hash": "fb18216a13eeb5d0e191dc1993884aa8"
   },
   "frontend/e2e/cash-close-approval-journey.spec.ts": {
-    "mtime": 1794169911414.899,
-    "hash": "41621d7727dd1cad7b714a23091472cf"
+    "mtime": 1794190840778.3608,
+    "hash": "c882e075ed051ade542839f630e85665"
   },
   "app/schemas/datetime_types.py": {
     "mtime": 1794169911357.7168,
@@ -6764,8 +6764,8 @@
     "hash": "b0785b623a96571f8a345fb7bd5539b4"
   },
   "app/services/allocation_trigger_service.py": {
-    "mtime": 1794169911360.8057,
-    "hash": "fd64cb99247d3f21a440c49360914cdd"
+    "mtime": 1794197669789.1562,
+    "hash": "6dd476bfe8a4d6f7d27e1c4658dce8d3"
   },
   "app/services/postgres_event_listener.py": {
     "mtime": 1794169911368.2007,
@@ -6820,8 +6820,8 @@
     "hash": "91b8c7a6afe55daddc5831ec26ce355b"
   },
   "app/tasks/run_scheduled_hotel_jobs.py": {
-    "mtime": 1794169911372.4185,
-    "hash": "cf9dfc09ba971671ba6469053b80ee60"
+    "mtime": 1794201443077.6973,
+    "hash": "a2cb2034b3125a5f02ca4784356e6126"
   },
   "tests/test_scheduled_hotel_jobs.py": {
     "mtime": 1794169911533.7175,
@@ -7236,12 +7236,12 @@
     "hash": "e5d6bf350e0b860aed756e1c23a6ea75"
   },
   "app/services/reservation_update_service.py": {
-    "mtime": 1794169911369.8313,
-    "hash": "7bbfe994267f31f64354de0b802eeb6f"
+    "mtime": 1794189600500.61,
+    "hash": "a142427c6c95a2b56b62512498c2c1fc"
   },
   "tests/test_reservation_update_service.py": {
-    "mtime": 1794169911531.9219,
-    "hash": "2bf7eafe44714e10368d5c0e7b460f63"
+    "mtime": 1794189600501.2966,
+    "hash": "3e695826ed91b423b6cff803dc9e66f7"
   },
   "app/tasks/payment_link_revocation_tasks.py": {
     "mtime": 1794169911372.1958,
@@ -7252,8 +7252,8 @@
     "hash": "009d1496ed1b7df7b03724d5380288c5"
   },
   "tests/test_payment_link_revocation_tasks.py": {
-    "mtime": 1794169911525.8335,
-    "hash": "493d9d6156b667f970bb99496f387175"
+    "mtime": 1794201443078.1946,
+    "hash": "5eeba403ba0f2ae5b66c36b9523aeca2"
   },
   "tests/test_checkin_room_lock_postgres.py": {
     "mtime": 1794169911513.6047,
@@ -7476,8 +7476,8 @@
     "hash": "bcdb6613c9e97f5ded2870ab4c611f5f"
   },
   "app/tasks/allocation_tasks.py": {
-    "mtime": 1794169911371.6094,
-    "hash": "36d5b5214ce83552291c03c251d6f820"
+    "mtime": 1794197124645.3154,
+    "hash": "f40b5f8d453cbce827895bb4df856c96"
   },
   "frontend/e2e/allocation-operator-flows.spec.ts": {
     "mtime": 1794181304440.412,
@@ -7496,8 +7496,8 @@
     "hash": "d20fe375b853b3ecb3ac548c3a4370c9"
   },
   "frontend/src/components/AllocationProposalReview.tsx": {
-    "mtime": 1794169911473.21,
-    "hash": "0a0cb198a482bc5f7ce4b096fe8c2d55"
+    "mtime": 1794198463469.0354,
+    "hash": "c7f6d87a731e86a5381c21204070e549"
   },
   "frontend/src/components/AllocationReservationLocks.tsx": {
     "mtime": 1794169911473.3008,
@@ -7516,8 +7516,8 @@
     "hash": "87a289e80148585704a7cb106afcedf1"
   },
   "frontend/src/hooks/useAllocationWorkspace.ts": {
-    "mtime": 1794169911478.1318,
-    "hash": "79589206672cfeb39b0075e6b2c5420d"
+    "mtime": 1794192196364.6028,
+    "hash": "1969d82571d1ca03c21199250a3ca15d"
   },
   "frontend/src/views/protected/AllocationPage.tsx": {
     "mtime": 1794169911488.9448,
@@ -7528,8 +7528,8 @@
     "hash": "b529fc552da8e4f08e4cf144fbf91098"
   },
   "tests/test_allocation_creation_trigger.py": {
-    "mtime": 1794169911508.8447,
-    "hash": "b68a6fe6c7f35081a8af95cade9b0a49"
+    "mtime": 1794197124645.6382,
+    "hash": "4d04baf18dbd2fba5c7dc299c4e6a44a"
   },
   "tests/test_allocation_runtime_postgres.py": {
     "mtime": 1794169911509.9048,
@@ -7712,8 +7712,8 @@
     "hash": "de12d18fe84e4b4c2c6efebe001af863"
   },
   "tests/test_reservation_extension_pricing_postgres.py": {
-    "mtime": 1794169911530.545,
-    "hash": "9352d3a2d3a5ba762351977e99ca260c"
+    "mtime": 1794189600500.956,
+    "hash": "b92c7691da1b6699e9fd442c0b75d5ff"
   },
   "qa/evidence/2026-11-06-playwright-cloud-round-2/observation.md": {
     "mtime": 1794169911499.67,
@@ -7814,5 +7814,25 @@
   "frontend/e2e/assistant-permission-guard.spec.ts": {
     "mtime": 1794171588025.0334,
     "hash": "a3cae98431a6a991d484068be6a05f7d"
+  },
+  "frontend/cash-count-validation.test.mjs": {
+    "mtime": 1794190840777.9016,
+    "hash": "6b44495a2b5564c5f0a877a5fc1bfbe7"
+  },
+  "frontend/src/utils/cashCountValidation.ts": {
+    "mtime": 1794190840778.7275,
+    "hash": "55541a3e1a6ec23fcb965dd194776616"
+  },
+  "alembic/versions/20261108_queue_manual_allocation_runs.py": {
+    "mtime": 1794192196362.7625,
+    "hash": "1c725b4b4ce2eebb57174271bb0e6d11"
+  },
+  "frontend/e2e/allocation-applied-proposal-history.spec.ts": {
+    "mtime": 1794192083273.6187,
+    "hash": "192711918cb794ca2d08f89dd910720c"
+  },
+  "frontend/reservation-operational-total-summary.test.mjs": {
+    "mtime": 1794201875886.0244,
+    "hash": "cccefee63ec099e4e3da4908edbe3b18"
   }
 }
