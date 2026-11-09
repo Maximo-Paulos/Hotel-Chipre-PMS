@@ -27,6 +27,27 @@ type GuestArrivalRowProps = {
   }) => Promise<unknown>;
 };
 
+const checkinValidationFieldByError: Record<string, keyof GuestUpdatePayload> = {
+  "Document type (DNI/PASSPORT/CEDULA) is required": "document_type",
+  "Document number is required": "document_number",
+  "Nationality is required": "nationality",
+  "Country is required": "country",
+  "Birth place is required": "birth_place",
+  "Birth country is required": "birth_country",
+  "Marital status is required": "marital_status",
+  "Occupation is required": "occupation",
+  "Guest must accept terms and conditions": "terms_accepted",
+  "El tipo de documento (DNI/pasaporte) es obligatorio": "document_type",
+  "El número de documento es obligatorio": "document_number",
+  "La nacionalidad es obligatoria": "nationality",
+  "El país es obligatorio": "country",
+  "El lugar de nacimiento es obligatorio": "birth_place",
+  "El país de nacimiento es obligatorio": "birth_country",
+  "El estado civil es obligatorio": "marital_status",
+  "La ocupación es obligatoria": "occupation",
+  "El huésped debe aceptar los términos y condiciones": "terms_accepted"
+};
+
 function GuestArrivalRow({
   guest,
   arrival,
@@ -61,6 +82,13 @@ function GuestArrivalRow({
 
   const validation = validationQuery.data;
   const profileNeedsWork = validation?.valid === false;
+  const visibleValidationErrors = (validation?.errors ?? []).filter((message) => {
+    const field = checkinValidationFieldByError[message];
+    if (!field) return true;
+    const value = form[field];
+    if (field === "terms_accepted") return value !== true;
+    return typeof value !== "string" || value.trim().length === 0;
+  });
   const arrivalTime = arrival
     ? new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(new Date(arrival.arrived_at))
     : null;
@@ -143,7 +171,11 @@ function GuestArrivalRow({
 
       {profileNeedsWork && formOpen && !arrival ? (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3" data-testid={"guest-arrival-profile-" + guest.id}>
-          <p className="text-xs text-amber-800">{(validation?.errors ?? []).join("; ")}</p>
+          {visibleValidationErrors.length > 0 ? (
+            <p className="text-xs text-amber-800" role="alert" data-testid="guest-arrival-profile-validation">
+              {visibleValidationErrors.join("; ")}
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="text-xs text-slate-600">
               {t("drawer.checkinCapture.documentType")}

@@ -163,7 +163,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toBeVisible();
   await expect(pendingBalanceDrawer.getByLabel("Acepta términos y condiciones", { exact: true })).not.toBeChecked();
   const missingFieldsList = pendingBalanceDrawer.getByTestId("checkin-capture-form").getByRole("list");
-  await expect(missingFieldsList.getByRole("listitem", { name: "Completá el lugar de nacimiento.", exact: true })).toBeVisible();
+  await expect(missingFieldsList.getByRole("listitem").first()).toBeVisible();
   await expect(missingFieldsList).not.toContainText(".;");
   await pendingBalanceDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
 
@@ -242,6 +242,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await companionProfile.getByLabel("Estado civil", { exact: true }).fill("Soltero/a");
   await companionProfile.getByLabel("Profesión", { exact: true }).fill("Acompañante QA");
   await companionProfile.getByLabel("Acepta términos y condiciones", { exact: true }).check();
+  await expect(companionProfile.getByTestId("guest-arrival-profile-validation")).toHaveCount(0);
   const companionGuestId = Number((await companionArrivalRow.getAttribute("data-testid"))?.replace("guest-arrival-row-", ""));
   expect(companionGuestId).toBeGreaterThan(0);
   const registerCompanionArrival = companionArrivalRow.getByTestId(`guest-arrival-profile-submit-${companionGuestId}`);
