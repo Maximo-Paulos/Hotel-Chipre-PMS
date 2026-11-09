@@ -314,7 +314,7 @@ export function OccupancyGrid({ data, days, todayIso, sortMode, onSelectReservat
   const legendStatuses = ["pending", "deposit_paid", "fully_paid", "pre_check_in", "checked_in"] as const;
 
   return (
-    <div data-testid="occupancy-grid" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div data-testid="occupancy-grid" className="relative z-0 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div aria-label={t("occupancy.legendLabel")} className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
         <span className="font-semibold text-slate-700">{t("occupancy.legendLabel")}</span>
       {legendStatuses.map((status) => (

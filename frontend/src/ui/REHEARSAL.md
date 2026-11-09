@@ -54,3 +54,17 @@ Reviewed Planilla, Reservas, Habitaciones, Caja, Limpieza de hoy, and Tareas at 
 The before/after screenshots were captured from the local Vite app at 390×844 and 1280×800, with synthetic data and blocked mutations. They are task-local review artifacts and are not cloud evidence. The synthetic run observed no browser exceptions and made no backend writes. Focused Playwright assertions were added for planilla touch height, Caja heading width, and mobile task-page overflow.
 
 No PostgreSQL-backed E2E, cloud deployment, live hotel data, payment workflow, or provider behavior was verified in this visual rehearsal. The full role matrix and every downstream state on these routes remain outside this pass.
+
+## Rehearsal: occupancy grid header layering
+
+### Gold and adapted StageShow method
+
+Gold: the user's mobile hotel guide, adapted to the real occupancy timeline. StageShow `framing.md` and `craft.md` informed review at the actual narrow widths and the relationship between fixed app chrome and a dense scrolling surface; `verify.md`, `rehearse.md`, and `review.md` informed the before/after scroll frames and fresh-eye check. No demo UI or product behavior was introduced.
+
+### Finding and fix
+
+At 320px, scrolling the page 520px let the occupancy table's sticky left header (`z-index: 30`) paint over the app's sticky header (`z-index: 20`). The app title was no longer the element under its visible title coordinates; the table cell "HABITACIÓN" was hit instead. The grid now owns a local stacking context at `z-index: 0`, so its internal sticky cells retain their ordering without escaping above the app header.
+
+### Evidence and limits
+
+The Playwright regression uses 16 synthetic rooms and runs at 390×844 and 320×844. It captures before/after scroll frames, calls `window.scrollTo(0, 520)`, confirms the title remains the hit-tested element, checks that vertical page scrolling leaves the grid's `scrollTop` at zero, and verifies the grid's horizontal scroll and pinned first column still work. Its mock blocks all writes; it does not use hotel data or cloud services. The product header behavior was not checked against every browser engine or role.
