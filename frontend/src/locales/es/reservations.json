@@ -1096,6 +1096,7 @@
       "refundReasonPlaceholder": "Motivo breve y verificable",
       "paymentPermissionRequired": "Tu rol no tiene permiso para registrar cobros.",
       "paymentAuthorizedUserRequired": "Tu perfil no puede registrar cobros ni acceder a Caja. Pedile a un usuario autorizado que registre el pago; después podrás continuar el check-in.",
+      "noPaymentCollectionRequired": "No hay cobros pendientes. El permiso de Caja solo es necesario para registrar pagos.",
       "paymentPermissionChecking": "Verificando si tu perfil puede registrar cobros…",
       "paymentPermissionCheckFailed": "No se pudo verificar si tu perfil puede registrar cobros. Reintentá antes de continuar.",
       "paymentProcessing": "Procesando la operación de dinero...",
