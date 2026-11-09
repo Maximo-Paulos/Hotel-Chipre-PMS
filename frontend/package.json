@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "e2e": "playwright test",
+    "test:visual:planilla": "playwright test --config=playwright.visual.config.ts",
     "e2e:headed": "playwright test --headed",
     "test:marketing-html": "node --test marketing-html.test.mjs",
     "test:csv": "node --test csv-cell.test.mjs"
