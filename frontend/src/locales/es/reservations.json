@@ -62,7 +62,8 @@
       "completeAndRegister": "Guardar perfil y registrar llegada"
     },
     "checkinCapture": {
-      "title": "Completar datos para el check-in",
+      "title": "Datos del huésped titular",
+      "hint": "Completá este perfil para confirmar el check-in de la reserva. Las llegadas individuales se registran en el panel superior.",
       "loading": "Validando los datos requeridos para el check-in…",
       "loadFailed": "No se pudieron validar los datos del huésped. El check-in permanece bloqueado.",
       "clockLoadFailed": "No se pudo verificar la fecha operativa del hotel. El check-in permanece bloqueado.",

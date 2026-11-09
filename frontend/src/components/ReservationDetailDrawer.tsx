@@ -1986,14 +1986,15 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
               ) : null}
 
               {needsCheckinCapture && (
-                <section className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="checkin-capture-form">
-                  <p className="text-xs uppercase tracking-wide text-amber-800">{t("drawer.checkinCapture.title")}</p>
+                <section className="rounded-lg border border-amber-300 bg-amber-50/70 p-4" data-testid="checkin-capture-form">
+                  <h4 className="text-sm font-semibold leading-5 text-amber-950">{t("drawer.checkinCapture.title")}</h4>
+                  <p className="mt-1 max-w-prose text-xs leading-5 text-amber-900">{t("drawer.checkinCapture.hint")}</p>
                   {checkinValidation.data && checkinValidation.data.errors.length > 0 && (
-                    <p className="mt-1 text-xs text-amber-800">{localizedCheckinErrors.join("; ")}</p>
+                    <p className="mt-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-xs leading-5 text-amber-900">{localizedCheckinErrors.join("; ")}</p>
                   )}
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.documentType")}</span>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.documentType")}</span>
                       <select
                         value={captureForm.document_type}
                         onChange={(event) =>
@@ -2002,7 +2003,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                             document_type: event.target.value as CheckinCaptureForm["document_type"]
                           }))
                         }
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                       >
                         <option value="">{t("drawer.checkinCapture.documentTypeUnspecified")}</option>
                         <option value="DNI">{t("drawer.checkinCapture.documentTypeDni")}</option>
@@ -2010,79 +2011,80 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         <option value="CEDULA">{t("drawer.checkinCapture.documentTypeCedula")}</option>
                       </select>
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.documentNumber")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.documentNumber")}</span>
                       <input
                         type="text"
                         value={captureForm.document_number}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, document_number: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                       />
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.nationality")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.nationality")}</span>
                       <input
                         type="text"
                         value={captureForm.nationality}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, nationality: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                       />
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.country")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.country")}</span>
                       <input
                         type="text"
                         value={captureForm.country}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, country: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                       />
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.birthPlace")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.birthPlace")}</span>
                       <input
                         type="text"
                         value={captureForm.birth_place}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, birth_place: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                         aria-label={t("drawer.checkinCapture.birthPlace")}
                       />
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.birthCountry")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.birthCountry")}</span>
                       <input
                         type="text"
                         value={captureForm.birth_country}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, birth_country: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                         aria-label={t("drawer.checkinCapture.birthCountry")}
                       />
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.maritalStatus")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.maritalStatus")}</span>
                       <input
                         type="text"
                         value={captureForm.marital_status}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, marital_status: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                         aria-label={t("drawer.checkinCapture.maritalStatus")}
                       />
                     </label>
-                    <label className="space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.checkinCapture.occupation")}</span>
+                    <label className="min-w-0 space-y-1 text-xs">
+                      <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.occupation")}</span>
                       <input
                         type="text"
                         value={captureForm.occupation}
                         onChange={(event) => setCaptureForm((prev) => ({ ...prev, occupation: event.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                         aria-label={t("drawer.checkinCapture.occupation")}
                       />
                     </label>
                   </div>
-                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                  <label className="mt-3 flex items-start gap-3 rounded-md border border-amber-200 bg-white/70 px-3 py-2.5 text-xs leading-5 text-slate-800">
                     <input
                       type="checkbox"
                       checked={captureForm.terms_accepted}
                       onChange={(event) => setCaptureForm((prev) => ({ ...prev, terms_accepted: event.target.checked }))}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
                     />
                     {t("drawer.checkinCapture.acceptTerms")}
                   </label>

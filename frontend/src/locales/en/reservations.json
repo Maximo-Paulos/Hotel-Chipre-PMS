@@ -62,7 +62,8 @@
       "completeAndRegister": "Save profile and record arrival"
     },
     "checkinCapture": {
-      "title": "Complete check-in details",
+      "title": "Primary guest details",
+      "hint": "Complete this profile to confirm the reservation check-in. Individual arrivals are recorded in the panel above.",
       "loading": "Validating the required check-in details…",
       "loadFailed": "Guest details could not be validated. Check-in remains blocked.",
       "clockLoadFailed": "The hotel's business date could not be verified. Check-in remains blocked.",
