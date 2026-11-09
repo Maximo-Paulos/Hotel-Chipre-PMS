@@ -137,6 +137,10 @@ const checkinFieldKeysByName: Record<string, string> = {
   terms_accepted: "drawer.checkinCapture.requiredFields.termsAccepted"
 };
 
+const checkinFieldNamesByKey = Object.fromEntries(
+  Object.entries(checkinFieldKeysByName).map(([field, key]) => [key, field])
+) as Record<string, keyof typeof checkinFieldKeysByName>;
+
 const getCheckinApiErrorDetail = (error: unknown): unknown => {
   if (!(error instanceof ApiError) || !error.payload || typeof error.payload !== "object") return null;
   return (error.payload as Record<string, unknown>).detail;
@@ -488,10 +492,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const checkinDataReady = !checkinDataRelevant || (
     guestQuery.isSuccess && checkinValidation.isSuccess && !checkinDataLoading && !checkinDataError
   );
-  const localizedCheckinErrors = (checkinValidation.data?.errors ?? []).map((error) => {
-    const key = checkinValidationErrorKeys[error];
-    return key ? t(key) : t("drawer.checkinCapture.requiredFields.unknown");
-  });
+  const checkinCaptureErrors = checkinValidation.data?.errors ?? [];
   const checkinFieldValues: Record<string, string | boolean> = {
     first_name: guestQuery.data?.first_name ?? "",
     last_name: guestQuery.data?.last_name ?? "",
@@ -505,14 +506,18 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     occupation: captureForm.occupation,
     terms_accepted: captureForm.terms_accepted
   };
-  const checkinCaptureErrors = checkinValidation.data?.errors ?? [];
-  const checkinCaptureComplete = checkinCaptureErrors.length > 0 && checkinCaptureErrors.every((error) => {
-    const key = checkinValidationErrorKeys[error];
-    const field = Object.entries(checkinFieldKeysByName).find(([, value]) => value === key)?.[0];
-    if (!field) return false;
+  const visibleCheckinCaptureErrors = checkinCaptureErrors.filter((error) => {
+    const messageKey = checkinValidationErrorKeys[error];
+    const field = messageKey ? checkinFieldNamesByKey[messageKey] : undefined;
+    if (!field) return true;
     const value = checkinFieldValues[field];
-    return typeof value === "boolean" ? value : value.trim().length > 0;
+    return typeof value === "boolean" ? !value : value.trim().length === 0;
   });
+  const localizedCheckinErrors = visibleCheckinCaptureErrors.map((error) => {
+    const key = checkinValidationErrorKeys[error];
+    return key ? t(key) : t("drawer.checkinCapture.requiredFields.unknown");
+  });
+  const checkinCaptureComplete = checkinCaptureErrors.length > 0 && visibleCheckinCaptureErrors.length === 0;
   const checkinBeforeArrival = Boolean(reservation?.check_in_date && businessDate && reservation.check_in_date > businessDate);
   const checkinDateUnknown = checkinDataRelevant && !businessDate;
   const pendingActionMessage = individualExtensionMutation.isPending
@@ -1989,7 +1994,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 <section className="rounded-lg border border-amber-300 bg-amber-50/70 p-4" data-testid="checkin-capture-form">
                   <h4 className="text-sm font-semibold leading-5 text-amber-950">{t("drawer.checkinCapture.title")}</h4>
                   <p className="mt-1 max-w-prose text-xs leading-5 text-amber-900">{t("drawer.checkinCapture.hint")}</p>
-                  {checkinValidation.data && checkinValidation.data.errors.length > 0 && (
+                  {localizedCheckinErrors.length > 0 ? (
                     <div className="mt-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-xs leading-5 text-amber-900">
                       <ul className="list-disc space-y-1 pl-5">
                         {localizedCheckinErrors.map((error, index) => (
@@ -1997,7 +2002,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         ))}
                       </ul>
                     </div>
-                  )}
+                  ) : null}
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <label className="min-w-0 space-y-1 text-xs">
                       <span className="block font-medium leading-5 text-slate-700">{t("drawer.checkinCapture.documentType")}</span>
