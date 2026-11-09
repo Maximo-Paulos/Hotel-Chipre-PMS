@@ -39,8 +39,8 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await page.goto("/settings/hotel");
   await page.getByPlaceholder("Nombre").fill(categoryName);
   await page.getByPlaceholder("Código").fill(categoryCode);
-  await page.getByPlaceholder("Precio base").fill("50000");
-  await page.getByPlaceholder("Ocupación máx").fill("2");
+  await page.getByLabel("Precio base por noche").fill("50000");
+  await page.getByLabel("Ocupación máxima").fill("2");
   await page.getByRole("button", { name: "Agregar categoría", exact: true }).click();
   await expect(page.getByText(`${categoryName} (${categoryCode})`, { exact: true })).toBeVisible();
 

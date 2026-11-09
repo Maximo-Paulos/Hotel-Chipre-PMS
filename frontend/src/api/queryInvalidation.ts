@@ -85,12 +85,13 @@ export function invalidateQueriesInBackground(
 export async function refreshAfterMutation(
   queryClient: QueryClient,
   hotelId: number | null | undefined,
-  domains: readonly QueryDomain[]
+  domains: readonly QueryDomain[],
+  options: { waitForActiveRefetch?: boolean } = {}
 ): Promise<void> {
   if (!hotelId || !Number.isInteger(hotelId) || hotelId <= 0 || domains.length === 0) return;
 
   const prefixes = new Set(domains.flatMap((domain) => QUERY_PREFIXES_BY_DOMAIN[domain]));
-  await refreshHotelQueriesByPrefix(queryClient, hotelId, prefixes, false);
+  await refreshHotelQueriesByPrefix(queryClient, hotelId, prefixes, options.waitForActiveRefetch ?? false);
 }
 
 const refreshHotelQueriesByPrefix = async (
@@ -312,8 +313,11 @@ export const refreshRoomState = (
   return refreshAfterMutation(queryClient, hotelId, ["rooms", "reservations", "analytics"]);
 };
 
-export const refreshStockState = (queryClient: QueryClient, hotelId: number | null | undefined) =>
-  refreshAfterMutation(queryClient, hotelId, ["stock", "analytics"]);
+export const refreshStockState = (
+  queryClient: QueryClient,
+  hotelId: number | null | undefined,
+  options: { waitForActiveRefetch?: boolean } = {}
+) => refreshAfterMutation(queryClient, hotelId, ["stock", "analytics"], options);
 
 export const refreshSettingsState = (queryClient: QueryClient, hotelId: number | null | undefined) =>
   refreshAfterMutation(queryClient, hotelId, ["settings", "security", "analytics"]);
