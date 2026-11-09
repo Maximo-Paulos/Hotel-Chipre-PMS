@@ -79,6 +79,28 @@
   [role="banner"] select {
     height: 44px;
   }
+
+  .pms-shell main button,
+  .pms-shell main input:not([type="checkbox"]):not([type="radio"]),
+  .pms-shell main select,
+  .pms-shell main textarea,
+  .pms-shell header button,
+  .pms-shell header select,
+  .pms-shell [role="dialog"] button,
+  .pms-shell [role="dialog"] input:not([type="checkbox"]):not([type="radio"]),
+  .pms-shell [role="dialog"] select,
+  .pms-shell [role="dialog"] textarea,
+  .pms-shell [role="banner"] button,
+  .pms-shell [role="banner"] select {
+    min-height: 48px;
+  }
+
+  .pms-shell main select,
+  .pms-shell header select,
+  .pms-shell [role="dialog"] select,
+  .pms-shell [role="banner"] select {
+    height: 48px;
+  }
 }
 
 /* UX polish pass (owner request: "Apple HIG" feel -- functional, quiet,

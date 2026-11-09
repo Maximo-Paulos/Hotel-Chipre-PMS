@@ -226,14 +226,14 @@ export function DashboardPage() {
         <div className="flex flex-wrap gap-2">
           <Link
             to="/reservas?crear=1"
-            className="rounded-control bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-raise hover:bg-brand-700 active:scale-[0.98]"
+            className="inline-flex min-h-[52px] items-center rounded-control bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-raise hover:bg-brand-700 active:scale-[0.98] sm:min-h-0"
           >
             {t("actions.newReservation")}
           </Link>
           {canAssignRooms || canViewRooms ? (
             <Link
               to={canAssignRooms ? "/operacion/planilla" : "/habitaciones"}
-              className="rounded-control bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50 active:scale-[0.98]"
+              className="inline-flex min-h-[48px] items-center rounded-control bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50 active:scale-[0.98] sm:min-h-0"
             >
               {t(canAssignRooms ? "actions.assignRoom" : "actions.viewRooms")}
             </Link>

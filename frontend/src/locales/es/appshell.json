@@ -183,6 +183,7 @@
   "mobileMenu": {
     "ariaLabel": "Menú de navegación",
     "openMenu": "Abrir menú",
+    "home": "Inicio",
     "closeMenu": "Cerrar menú",
     "title": "Menú",
     "navAriaLabel": "Navegación móvil"
