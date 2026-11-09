@@ -2152,11 +2152,16 @@ def list_reservations(
         term = search.strip()
         if term:
             # Global reservation search (B1 header search): match confirmation
-            # code or guest last name. Guest is joined scoped to the same
-            # hotel_id so a search can never leak a match from another hotel.
+            # code, either name field, or the displayed full guest name.
+            # Guest is joined to this hotel so search cannot leak another
+            # hotel's guest match.
             like = f"%{term}%"
+            guest_full_name = Guest.first_name + " " + Guest.last_name
             query = query.filter(
-                (Reservation.confirmation_code.ilike(like)) | (Guest.last_name.ilike(like)),
+                (Reservation.confirmation_code.ilike(like))
+                | (Guest.first_name.ilike(like))
+                | (Guest.last_name.ilike(like))
+                | guest_full_name.ilike(like),
             )
     # A2: "recent" (created_at DESC, id DESC) is the new default -- dashboards
     # and any "recent activity" view want newest-first. "check_in" preserves

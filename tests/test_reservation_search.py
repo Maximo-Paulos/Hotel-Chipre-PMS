@@ -1,8 +1,8 @@
 """Tests for the reservation global search filter (B1 header search).
 
 Search is a thin filter on top of list_reservations: match by confirmation
-code or guest last name, always scoped to hotel_id so it can never surface a
-match that belongs to a different hotel.
+code or guest name, always scoped to hotel_id so it can never surface a match
+that belongs to a different hotel.
 """
 from datetime import date
 
