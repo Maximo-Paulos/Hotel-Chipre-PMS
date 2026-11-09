@@ -21,6 +21,7 @@ from app.services.reservation_service import (
     ManualRatePolicyError,
     ReservationVersionConflict,
     reservation_has_deferred_company_billing,
+    reservation_uses_manual_total_override,
     update_reservation_fields,
     validate_direct_individual_manual_rate_target,
 )
@@ -235,22 +236,17 @@ def apply_reservation_update(
     """
     before = audit_log_service.model_snapshot(reservation)
     submitted_data = data.model_dump(exclude_unset=True)
-    new_check_out = submitted_data.get("check_out_date")
-    # The dedicated stay-extension flow already carries a negotiated nightly
-    # amount forward when no current rate can be quoted. Apply that same rule
-    # to the edit modal when it extends a reservation with an explicit manual
-    # total, without treating the resulting amount change as a manual total
-    # correction. Existing payments remain ledger entries and are not rewritten.
+    # A manually negotiated nightly amount is part of the booked price. When
+    # either date changes, keep that nightly amount and recalculate the total
+    # for the resulting stay; this is a repricing of the stay, not a manual
+    # total correction. Existing payments remain ledger entries and are not
+    # rewritten.
     recalculate_manual_nightly_rate = False
-    if new_check_out is not None and new_check_out > reservation.check_out_date:
-        try:
-            pricing_snapshot = json.loads(reservation.pricing_snapshot or "{}")
-        except (TypeError, json.JSONDecodeError):
-            pricing_snapshot = {}
-        recalculate_manual_nightly_rate = (
-            isinstance(pricing_snapshot, dict)
-            and pricing_snapshot.get("pricing_source") == "manual_total_override"
-        )
+    dates_changed = any(
+        field in submitted_data and submitted_data[field] != getattr(reservation, field)
+        for field in ("check_in_date", "check_out_date")
+    )
+    recalculate_manual_nightly_rate = dates_changed and reservation_uses_manual_total_override(reservation)
     update_reservation_fields(
         db,
         reservation,

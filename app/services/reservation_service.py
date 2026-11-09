@@ -2617,14 +2617,14 @@ def _apply_date_change_pricing(
                 company_id=reservation.company_id,
             )
         except ReservationError as exc:
-            # If the added checkout night has no active tariff, carry forward
+            # If a changed checkout date has no active tariff, carry forward
             # the historical nightly price. This is intentionally narrower
-            # than general repricing: other pricing failures, date edits, and
-            # company billing still require their normal operator workflow.
+            # than general repricing: check-in changes, other pricing failures,
+            # and company billing still require their normal operator workflow.
             if (
                 str(exc) != "No active prices found for rate plan"
                 or check_in_date != reservation.check_in_date
-                or check_out_date <= reservation.check_out_date
+                or check_out_date == reservation.check_out_date
                 or reservation.company_id is not None
             ):
                 raise
@@ -3275,6 +3275,11 @@ def _pricing_snapshot_values(reservation: Reservation) -> dict[str, Any]:
     except (TypeError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def reservation_uses_manual_total_override(reservation: Reservation) -> bool:
+    """Return whether the reservation stores an operator-entered total."""
+    return _pricing_snapshot_values(reservation).get("pricing_source") == "manual_total_override"
 
 
 def preserved_nightly_total_for_nights(

@@ -459,7 +459,15 @@ def apply_resource_changes(
     db_values = _model_dump_for_database(spec.resource_type, normalized)
 
     if spec.resource_type == "reservation":
-        from app.services.reservation_service import update_reservation_fields
+        from app.services.reservation_service import (
+            reservation_uses_manual_total_override,
+            update_reservation_fields,
+        )
+
+        dates_changed = any(
+            field in db_values and db_values[field] != getattr(resource, field)
+            for field in ("check_in_date", "check_out_date")
+        )
 
         update_reservation_fields(
             db,
@@ -470,6 +478,9 @@ def apply_resource_changes(
             actor_role=actor_role,
             client_version=resource.version,
             preserve_unclassified_price=True,
+            recalculate_explicit_price=(
+                dates_changed and reservation_uses_manual_total_override(resource)
+            ),
         )
         return resource
 

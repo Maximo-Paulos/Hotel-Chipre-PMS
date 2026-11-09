@@ -126,21 +126,29 @@ def test_manual_total_update_mutation_and_audit_share_one_commit(monkeypatch):
     assert events[-1] == ("refresh", reservation)
 
 
-def test_checkout_extension_recalculates_manual_nightly_price_without_touching_paid_ledger(monkeypatch):
+@pytest.mark.parametrize(
+    ("current_nights", "new_nights"),
+    [(1, 2), (3, 2)],
+    ids=["extension", "shortening"],
+)
+def test_checkout_change_recalculates_manual_nightly_price_without_touching_paid_ledger(
+    monkeypatch, current_nights, new_nights
+):
     events = []
     db = _RecordingSession(events)
+    check_in = date(2026, 11, 4)
     reservation = SimpleNamespace(
         id=47,
-        check_in_date=date(2026, 11, 4),
-        check_out_date=date(2026, 11, 5),
-        total_amount=Decimal("60000.00"),
+        check_in_date=check_in,
+        check_out_date=check_in + timedelta(days=current_nights),
+        total_amount=Decimal("60000.00") * current_nights,
         amount_paid=Decimal("3000.00"),
         pricing_snapshot=json.dumps(
             {"pricing_source": "manual_total_override", "nightly_rate": "60000.00"}
         ),
     )
     data = ReservationUpdate(
-        check_out_date=date(2026, 11, 6),
+        check_out_date=check_in + timedelta(days=new_nights),
         client_version=4,
     )
     _install_recording_dependencies(monkeypatch, events)
@@ -148,12 +156,12 @@ def test_checkout_extension_recalculates_manual_nightly_price_without_touching_p
 
     def mutate(_db, reservation_arg, data_arg, _hotel_id, **kwargs):
         captured.update(kwargs)
-        # The service passes the opt-in to the existing repricer. Simulate its
-        # expected two-night result while asserting the prior payment remains.
+        # The service passes the opt-in to the existing repricer while
+        # asserting the prior payment remains unchanged.
         if kwargs["recalculate_explicit_price"]:
             reservation_arg.total_amount = manual_override_total_for_nights(
                 reservation_arg,
-                nights=2,
+                nights=(data_arg.check_out_date - reservation_arg.check_in_date).days,
             )
         reservation_arg.check_out_date = data_arg.check_out_date
 
@@ -175,7 +183,7 @@ def test_checkout_extension_recalculates_manual_nightly_price_without_touching_p
     assert captured["preserve_unclassified_price"] is True
     assert reservation.total_amount == Decimal("120000.00")
     assert reservation.amount_paid == Decimal("3000.00")
-    assert reservation.check_out_date == date(2026, 11, 6)
+    assert reservation.check_out_date == data.check_out_date
 
 
 def test_checkout_extension_does_not_reprice_non_manual_reservation(monkeypatch):
@@ -221,10 +229,18 @@ def test_checkout_extension_does_not_reprice_non_manual_reservation(monkeypatch)
     ],
 )
 @pytest.mark.parametrize(
-    ("nightly_rate", "current_total", "current_nights", "expected_total"),
+    ("nightly_rate", "current_total", "current_nights", "checkout_delta", "expected_total"),
     [
-        ("60000.00", Decimal("60000.00"), 1, Decimal("120000.00")),
-        (None, Decimal("120000.00"), 2, Decimal("180000.00")),
+        ("60000.00", Decimal("60000.00"), 1, 1, Decimal("120000.00")),
+        (None, Decimal("120000.00"), 2, 1, Decimal("180000.00")),
+        ("60000.00", Decimal("180000.00"), 3, -1, Decimal("120000.00")),
+        (None, Decimal("180000.00"), 3, -1, Decimal("120000.00")),
+    ],
+    ids=[
+        "extend-stored-nightly-rate",
+        "extend-derived-nightly-rate",
+        "shorten-stored-nightly-rate",
+        "shorten-derived-nightly-rate",
     ],
 )
 def test_date_reprice_without_active_rate_carries_historical_nightly_amount(
@@ -234,6 +250,7 @@ def test_date_reprice_without_active_rate_carries_historical_nightly_amount(
     nightly_rate,
     current_total,
     current_nights,
+    checkout_delta,
     expected_total,
 ):
     class _CategoryQuery:
@@ -252,7 +269,7 @@ def test_date_reprice_without_active_rate_carries_historical_nightly_amount(
 
     db = _Session()
     old_checkout = date(2026, 11, 4) + timedelta(days=current_nights)
-    new_checkout = old_checkout + timedelta(days=1)
+    new_checkout = old_checkout + timedelta(days=checkout_delta)
     snapshot = {"pricing_source": pricing_source}
     if nightly_rate is not None:
         snapshot["nightly_rate"] = nightly_rate
