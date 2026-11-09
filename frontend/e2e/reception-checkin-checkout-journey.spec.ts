@@ -195,11 +195,16 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(captureForm).toContainText("Completá el lugar de nacimiento.");
   await expect(drawer.getByRole("button", { name: "Confirmar check-in", exact: true })).toBeDisabled();
 
+  await captureForm.getByLabel("Tipo de documento").selectOption("DNI");
+  await captureForm.getByLabel("Número de documento").fill("11111111");
+  await captureForm.getByLabel("Nacionalidad").fill("Argentina");
+  await captureForm.getByLabel("País", { exact: true }).fill("Argentina");
   await captureForm.getByLabel("Lugar de nacimiento").fill("Rosario");
   await captureForm.getByLabel("País de nacimiento").fill("Argentina");
   await captureForm.getByLabel("Estado civil").fill("Soltero/a");
   await captureForm.getByLabel("Profesión").fill("Recepcionista QA");
   await captureForm.getByLabel("Acepta términos y condiciones", { exact: true }).check();
+  await expect(captureForm.getByRole("list")).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: "Confirmar check-in", exact: true })).toBeEnabled();
 
   await drawer.getByLabel("Nombre del acompañante").fill("Acompañante");

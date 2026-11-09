@@ -1,7 +1,7 @@
 # Alembic head
 
-Generado: 2026-11-09T18:13:21.141105+00:00
-Commit: `feb513011e6c8d96d098e36ccfed980f20ba88a3`
+Generado: 2026-11-09T19:36:53.327728+00:00
+Commit: `6139bb5c778ed7a3d110f04b94f971cc2286dcdc`
 
 ```text
 20261108_queue_manual_allocation_runs (head)
