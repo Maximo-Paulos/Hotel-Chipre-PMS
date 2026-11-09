@@ -213,6 +213,30 @@ def test_cron_runs_provider_phase_after_sql_hotel_jobs(monkeypatch):
     assert events == ["sql", "allocation", "provider"]
 
 
+def test_cron_drains_allocation_queue_when_sql_scheduler_raises(monkeypatch):
+    events: list[str] = []
+
+    def fail_sql_scheduler():
+        events.append("sql")
+        raise RuntimeError("synthetic scheduler failure")
+
+    monkeypatch.setattr(cron_entrypoint, "run_scheduled_hotel_jobs", fail_sql_scheduler)
+    monkeypatch.setattr(
+        cron_entrypoint,
+        "process_recalculation_requests",
+        lambda: events.append("allocation")
+        or {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0},
+    )
+    monkeypatch.setattr(
+        cron_entrypoint,
+        "run_payment_link_revocation_tasks",
+        lambda: events.append("provider"),
+    )
+
+    assert cron_entrypoint.main() == 1
+    assert events == ["sql", "allocation"]
+
+
 def test_cron_reports_failed_allocation_processing(monkeypatch):
     monkeypatch.setattr(
         cron_entrypoint,

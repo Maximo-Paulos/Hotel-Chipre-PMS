@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T00:33:47.496Z",
+  "generatedAt": "2026-11-09T05:27:26.013Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3747,6 +3747,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_trigger_service_request_manual_allocation",
+      "name": "request_manual_allocation",
+      "entryPoint": "services_allocation_trigger_service_request_manual_allocation",
+      "entryPointId": "services_allocation_trigger_service_request_manual_allocation",
+      "path": [
+        "services_allocation_trigger_service_request_manual_allocation",
+        "services_allocation_trigger_service_allocationrequestinprogress",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "qualifiedPath": [
+        "services_allocation_trigger_service_request_manual_allocation",
+        "services_allocation_trigger_service_allocationrequestinprogress",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_trigger_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:app_main_request_telemetry",
       "name": "request_telemetry",
       "entryPoint": "app_main_request_telemetry",
@@ -4903,6 +4929,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_trigger_service_request_reservation_created_allocation",
+      "name": "request_reservation_created_allocation",
+      "entryPoint": "services_allocation_trigger_service_request_reservation_created_allocation",
+      "entryPointId": "services_allocation_trigger_service_request_reservation_created_allocation",
+      "path": [
+        "services_allocation_trigger_service_request_reservation_created_allocation",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_reservation_overlaps_allocation_horizon",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "qualifiedPath": [
+        "services_allocation_trigger_service_request_reservation_created_allocation",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_reservation_overlaps_allocation_horizon",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_trigger_service.py"
+      ],
+      "criticality": 0.37,
+      "warnings": []
+    },
+    {
       "id": "flow:services_permission_service_create_custom_role",
       "name": "create_custom_role",
       "entryPoint": "services_permission_service_create_custom_role",
@@ -4933,32 +4987,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_allocation_trigger_service_request_reservation_created_allocation",
-      "name": "request_reservation_created_allocation",
-      "entryPoint": "services_allocation_trigger_service_request_reservation_created_allocation",
-      "entryPointId": "services_allocation_trigger_service_request_reservation_created_allocation",
-      "path": [
-        "services_allocation_trigger_service_request_reservation_created_allocation",
-        "services_allocation_trigger_service_request_allocation_proposal",
-        "services_allocation_trigger_service_reservation_overlaps_allocation_horizon",
-        "services_allocation_trigger_service_pending_proposal_query"
-      ],
-      "qualifiedPath": [
-        "services_allocation_trigger_service_request_reservation_created_allocation",
-        "services_allocation_trigger_service_request_allocation_proposal",
-        "services_allocation_trigger_service_reservation_overlaps_allocation_horizon",
-        "services_allocation_trigger_service_pending_proposal_query"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_trigger_service.py"
-      ],
-      "criticality": 0.3575,
-      "warnings": []
-    },
-    {
       "id": "flow:services_payment_link_service_resolve_signed_external_reference",
       "name": "resolve_signed_external_reference",
       "entryPoint": "services_payment_link_service_resolve_signed_external_reference",
@@ -4980,6 +5008,32 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.3575,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_allocation_trigger_service_trigger_reoptimization_bg",
+      "name": "trigger_reoptimization_bg",
+      "entryPoint": "services_allocation_trigger_service_trigger_reoptimization_bg",
+      "entryPointId": "services_allocation_trigger_service_trigger_reoptimization_bg",
+      "path": [
+        "services_allocation_trigger_service_trigger_reoptimization_bg",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "qualifiedPath": [
+        "services_allocation_trigger_service_trigger_reoptimization_bg",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_trigger_service.py"
       ],
       "criticality": 0.3575,
       "warnings": []
@@ -5084,30 +5138,6 @@
       "fileCount": 1,
       "files": [
         "app/services/gemma_orchestrator.py"
-      ],
-      "criticality": 0.3367,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_allocation_trigger_service_trigger_reoptimization_bg",
-      "name": "trigger_reoptimization_bg",
-      "entryPoint": "services_allocation_trigger_service_trigger_reoptimization_bg",
-      "entryPointId": "services_allocation_trigger_service_trigger_reoptimization_bg",
-      "path": [
-        "services_allocation_trigger_service_trigger_reoptimization_bg",
-        "services_allocation_trigger_service_request_allocation_proposal",
-        "services_allocation_trigger_service_pending_proposal_query"
-      ],
-      "qualifiedPath": [
-        "services_allocation_trigger_service_trigger_reoptimization_bg",
-        "services_allocation_trigger_service_request_allocation_proposal",
-        "services_allocation_trigger_service_pending_proposal_query"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_trigger_service.py"
       ],
       "criticality": 0.3367,
       "warnings": []
@@ -7582,34 +7612,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_cash_register_service_close_session",
-      "name": "close_session",
-      "entryPoint": "services_cash_register_service_close_session",
-      "entryPointId": "services_cash_register_service_close_session",
-      "path": [
-        "services_cash_register_service_close_session",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_money",
-        "services_cash_register_service_movement_sign"
-      ],
-      "qualifiedPath": [
-        "services_cash_register_service_close_session",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_money",
-        "services_cash_register_service_movement_sign"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/cash_register_service.py"
-      ],
-      "criticality": 0.27,
-      "warnings": []
-    },
-    {
       "id": "flow:services_integration_service_connection_account_label",
       "name": "connection_account_label",
       "entryPoint": "services_integration_service_connection_account_label",
@@ -8403,36 +8405,6 @@
       "fileCount": 1,
       "files": [
         "app/api/operational_tasks.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_cash_register_service_get_session_summary",
-      "name": "get_session_summary",
-      "entryPoint": "services_cash_register_service_get_session_summary",
-      "entryPointId": "services_cash_register_service_get_session_summary",
-      "path": [
-        "services_cash_register_service_get_session_summary",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_list_movements",
-        "services_cash_register_service_money",
-        "services_cash_register_service_movement_sign"
-      ],
-      "qualifiedPath": [
-        "services_cash_register_service_get_session_summary",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_list_movements",
-        "services_cash_register_service_money",
-        "services_cash_register_service_movement_sign"
-      ],
-      "depth": 2,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/cash_register_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -9596,6 +9568,40 @@
         "app/services/operational_task_service.py"
       ],
       "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_register_service_close_session",
+      "name": "close_session",
+      "entryPoint": "services_cash_register_service_close_session",
+      "entryPointId": "services_cash_register_service_close_session",
+      "path": [
+        "services_cash_register_service_close_session",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movements_total",
+        "services_cash_register_service_money",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_movement_sign",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total"
+      ],
+      "qualifiedPath": [
+        "services_cash_register_service_close_session",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movements_total",
+        "services_cash_register_service_money",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_movement_sign",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total"
+      ],
+      "depth": 3,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.2425,
       "warnings": []
     },
     {
@@ -10934,6 +10940,42 @@
         "app/services/ota_service.py"
       ],
       "criticality": 0.2257,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_register_service_get_session_summary",
+      "name": "get_session_summary",
+      "entryPoint": "services_cash_register_service_get_session_summary",
+      "entryPointId": "services_cash_register_service_get_session_summary",
+      "path": [
+        "services_cash_register_service_get_session_summary",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_confirmed_cash_movements_total",
+        "services_cash_register_service_list_movements",
+        "services_cash_register_service_money",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total",
+        "services_cash_register_service_movement_sign"
+      ],
+      "qualifiedPath": [
+        "services_cash_register_service_get_session_summary",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_confirmed_cash_movements_total",
+        "services_cash_register_service_list_movements",
+        "services_cash_register_service_money",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total",
+        "services_cash_register_service_movement_sign"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.2256,
       "warnings": []
     },
     {
@@ -30986,6 +31028,28 @@
       "fileCount": 1,
       "files": [
         "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_reservation_uses_manual_total_override",
+      "name": "reservation_uses_manual_total_override",
+      "entryPoint": "services_reservation_service_reservation_uses_manual_total_override",
+      "entryPointId": "services_reservation_service_reservation_uses_manual_total_override",
+      "path": [
+        "services_reservation_service_reservation_uses_manual_total_override",
+        "services_reservation_service_pricing_snapshot_values"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_reservation_uses_manual_total_override",
+        "services_reservation_service_pricing_snapshot_values"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
