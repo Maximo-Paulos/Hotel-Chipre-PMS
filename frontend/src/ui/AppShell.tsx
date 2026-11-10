@@ -135,6 +135,11 @@ const mobileNavIcons: Record<string, BottomNavIcon> = {
   "/operacion/lavanderia": "laundry"
 };
 
+const mobileNavCompactLabels: Record<string, string> = {
+  "/operacion/asignacion": "bottomNav.assign",
+  "/habitaciones": "bottomNav.room"
+};
+
 const planRank: Record<"starter" | "pro" | "ultra", number> = {
   starter: 0,
   pro: 1,
@@ -169,6 +174,7 @@ function RealtimeDot({ label }: { label: string }) {
 
 export function AppShell() {
   const { t } = useTranslation("appshell");
+  const { t: tDashboard } = useTranslation("dashboard");
   const location = useLocation();
   const navigate = useNavigate();
   const { session, setRole } = useSession();
@@ -191,12 +197,15 @@ export function AppShell() {
   const mobileRoleLabel = roleLabels[role ?? "receptionist"];
   const isHousekeeping = realRole === "housekeeping";
   const homePath = defaultPathForRole(realRole);
-  const { hasAnyPermission, hasAllPermissions, hasPermission } = useEffectivePermissions();
+  const { hasAnyPermission, hasAllPermissions, hasPermission, permissionsKnown } = useEffectivePermissions();
+  const canCreateReservation = permissionsKnown && hasPermission("reservation:create");
+  const canAssignRooms = permissionsKnown
+    && hasPermission("occupancy:view")
+    && hasPermission("room:read")
+    && hasAnyPermission(["reservation:move", "reservation:move_category", "reservation:move_capacity"]);
   const { reservationId: drawerReservationId, closeReservation } = useReservationDrawer();
-  // The owner's phone-in-hand complaint (B7) was two competing mobile nav
-  // mechanisms at once (a horizontal-scroll pill row + a separate native
-  // <details> "Mas opciones" text link that doesn't read as a menu). One
-  // recognizable menu button + one slide-over panel replaces both.
+  // The bottom action button and the identity button open one sheet, keeping
+  // quick actions and secondary navigation in the same mobile surface.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const mobileMenuPanelRef = useDialogA11y(mobileMenuOpen, () => setMobileMenuOpen(false));
@@ -228,7 +237,7 @@ export function AppShell() {
 
   useEffect(() => {
     setMobileMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (isLoggedIn && !isVerified && location.pathname !== "/verify-email") {
@@ -275,9 +284,8 @@ export function AppShell() {
     .sort((left, right) => right.to.length - left.to.length)[0];
   const mobilePageTitle = activeNavItem ? t(activeNavItem.label) : t("mobileMenu.title");
 
-  // Mobile keeps four role-prioritized shortcuts plus the More button. Every
-  // shortcut still uses the existing permission-filtered catalogue, and every
-  // other visible route remains in the full drawer directory below.
+  // Mobile keeps four role-prioritized shortcuts and places the action
+  // button between them. The sheet retains the full filtered route directory.
   const bottomNavTabs = useMemo<BottomNavTab[]>(() => {
     const catalogue = [...dailyNav, ...groupedNav.flatMap((section) => section.items)];
     const priorities = mobileNavPriorities[mobileViewRole].map((path) => catalogue.find((item) => item.to === path));
@@ -286,18 +294,21 @@ export function AppShell() {
     const chosen = [...preferred, ...daily.filter((item) => !preferred.some((selected) => selected.to === item.to))].slice(0, 4);
     const tabs: BottomNavTab[] = chosen.map((item) => ({
       kind: "link",
-      label: t(item.label),
+      label: t(mobileNavCompactLabels[item.to] ?? item.label),
       to: item.to,
       icon: mobileNavIcons[item.to] ?? "rooms"
     }));
-    tabs.push({
+    const actionTab: BottomNavTab = {
       kind: "button",
-      label: t("bottomNav.more"),
+      label: t("bottomNav.actions"),
       onClick: () => setMobileMenuOpen(true),
-      testId: "bottom-nav-more-button",
+      testId: "bottom-nav-actions-button",
+      controlsId: "mobile-menu-panel",
       active: mobileMenuOpen,
-      icon: "more"
-    });
+      icon: "plus",
+      prominent: true
+    };
+    tabs.splice(Math.ceil(tabs.length / 2), 0, actionTab);
     return tabs;
   }, [mobileViewRole, filterItems, mobileMenuOpen, t]);
 
@@ -517,7 +528,7 @@ export function AppShell() {
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-ink-100 bg-paper-raised/95 backdrop-blur">
             {/* A compact three-part frame: home mark, current screen, role and alerts.
-                The role button and the persistent More tab open the same directory. */}
+                The role button and the bottom action button open the same sheet. */}
             <div className="grid min-h-16 grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 md:hidden">
               <Link to={homePath} aria-label={t("mobileMenu.home")} className="grid min-h-12 min-w-12 place-items-center text-slate-900">
                 <BrandMark variant="mark" className="h-8 w-8" />
@@ -595,17 +606,21 @@ export function AppShell() {
 
           {mobileMenuOpen && (
             <div
-              className="fixed inset-0 z-50 flex md:hidden"
+              className="fixed inset-0 z-50 flex items-end justify-center md:hidden"
               role="dialog"
               aria-modal="true"
-              aria-label={t("mobileMenu.ariaLabel")}
+              aria-labelledby="mobile-menu-title"
             >
-              <div className="flex-1 animate-fade-in bg-black/30" onClick={() => setMobileMenuOpen(false)} />
+              <div
+                className="absolute inset-0 bg-black/35"
+                data-testid="mobile-menu-backdrop"
+                onClick={() => setMobileMenuOpen(false)}
+              />
               <div
                 id="mobile-menu-panel"
                 ref={mobileMenuPanelRef}
                 tabIndex={-1}
-                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-hidden border-l border-ink-100 bg-paper-raised shadow-xl outline-none"
+                className="relative flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[22px] border-t border-ink-100 bg-paper-raised pb-[max(env(safe-area-inset-bottom),0.5rem)] shadow-xl outline-none sm:rounded-t-2xl"
               >
                 <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                   {/* Same "where am I" as the desktop sidebar header: without
@@ -613,7 +628,9 @@ export function AppShell() {
                       nowhere once the one-option selector stopped rendering.
                       Long names wrap instead of pushing the panel wider. */}
                   <div className="min-w-0">
-                    <span className="block text-sm font-semibold text-slate-900">{t("mobileMenu.title")}</span>
+                    <h2 id="mobile-menu-title" data-testid="mobile-quick-actions-title" className="text-lg font-semibold text-slate-900">
+                      {t("mobileMenu.title")}
+                    </h2>
                     {hotelConfig?.hotel_name && (
                       <span data-testid="mobile-active-hotel-name" className="block break-words text-xs text-slate-500">
                         {hotelConfig.hotel_name}
@@ -624,18 +641,57 @@ export function AppShell() {
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
                     aria-label={t("mobileMenu.closeMenu")}
-                    className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-full text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                   >
                     ×
                   </button>
                 </div>
 
                 <div data-testid="mobile-menu-scroll-region" className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+                  {(canCreateReservation || canAssignRooms) && (
+                    <section data-testid="mobile-quick-actions" className="shrink-0 border-b border-slate-100 px-4 py-4">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {t("mobileMenu.quickActionsHeading")}
+                      </h3>
+                      <div className="mt-3 grid gap-2">
+                        {canCreateReservation && (
+                          <Link
+                            to="/reservas?crear=1"
+                            onClick={() => setMobileMenuOpen(false)}
+                            data-testid="quick-action-new-reservation"
+                            className="inline-flex min-h-[52px] items-center justify-center rounded-control bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-raise hover:bg-brand-700"
+                          >
+                            {tDashboard("actions.newReservation")}
+                          </Link>
+                        )}
+                        {canAssignRooms && (
+                          <Link
+                            to="/operacion/planilla"
+                            onClick={() => setMobileMenuOpen(false)}
+                            data-testid="quick-action-assign-room"
+                            className={cx(
+                              "inline-flex min-h-[52px] items-center justify-center rounded-control px-4 py-3 text-sm font-semibold",
+                              canCreateReservation
+                                ? "bg-white text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50"
+                                : "bg-brand-600 text-white shadow-raise hover:bg-brand-700",
+                            )}
+                          >
+                            {tDashboard("actions.assignRoom")}
+                          </Link>
+                        )}
+                      </div>
+                    </section>
+                  )}
+
                   <nav aria-label={t("mobileMenu.navAriaLabel")} className="flex shrink-0 flex-col gap-1 px-3 py-3">
+                    <h3 className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {t("mobileMenu.sectionsHeading")}
+                    </h3>
                     {visibleDailyNav.map((item) => (
                       <NavLink
                         key={item.to}
                         to={item.to}
+                        onClick={() => setMobileMenuOpen(false)}
                         className={({ isActive }) =>
                           cx(
                             "flex min-h-12 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
@@ -655,6 +711,7 @@ export function AppShell() {
                         <NavLink
                           key={item.to}
                           to={item.to}
+                          onClick={() => setMobileMenuOpen(false)}
                           className={({ isActive }) =>
                             cx(
                             "flex min-h-12 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
@@ -681,7 +738,7 @@ export function AppShell() {
           {/* Bottom padding clears the fixed BottomNav (64px tall) plus the
               home-indicator safe area on notched phones; md+ keeps the
               original padding since the bottom nav is md:hidden there. */}
-          <main className="min-w-0 flex-1 px-4 pb-[calc(64px+env(safe-area-inset-bottom)+1rem)] pt-5 sm:px-8 md:pb-8 md:pt-8">
+          <main className="min-w-0 flex-1 px-4 pb-[calc(64px+max(env(safe-area-inset-bottom),0.5rem)+1rem)] pt-5 sm:px-8 md:pb-8 md:pt-8">
             <div className="mx-auto max-w-6xl min-w-0">
               <Suspense fallback={<p className="text-sm text-slate-500">{t("loading")}</p>}>
                 <Outlet />

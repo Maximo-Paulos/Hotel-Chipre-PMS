@@ -174,18 +174,23 @@
   },
   "bottomNav": {
     "alerts": "Alerts",
-    "more": "More"
+    "more": "More",
+    "actions": "Actions",
+    "room": "Room",
+    "assign": "Assign"
   },
   "alerts": {
     "viewUnread": "View alerts ({{count}} unread)",
     "view": "View alerts"
   },
   "mobileMenu": {
-    "ariaLabel": "Navigation menu",
+    "ariaLabel": "Actions and navigation",
     "openMenu": "Open menu",
     "home": "Home",
     "closeMenu": "Close menu",
-    "title": "Menu",
+    "title": "Actions and more",
+    "quickActionsHeading": "Quick actions",
+    "sectionsHeading": "More sections",
     "navAriaLabel": "Mobile navigation"
   },
   "loading": "Loading..."

@@ -11,6 +11,8 @@ export type BottomNavTab =
       testId?: string;
       active?: boolean;
       badge?: boolean;
+      prominent?: boolean;
+      controlsId?: string;
     };
 
 export type BottomNavIcon =
@@ -22,7 +24,8 @@ export type BottomNavIcon =
   | "tasks"
   | "cash"
   | "laundry"
-  | "more";
+  | "more"
+  | "plus";
 
 type Props = {
   tabs: BottomNavTab[];
@@ -30,7 +33,7 @@ type Props = {
 };
 
 function TabIcon({ name, active }: { name: BottomNavIcon; active: boolean }) {
-  const iconClass = active ? "text-brand-700" : "text-slate-500";
+  const iconClass = name === "plus" ? "text-white" : active ? "text-brand-700" : "text-slate-500";
 
   return (
     <svg
@@ -102,6 +105,7 @@ function TabIcon({ name, active }: { name: BottomNavIcon; active: boolean }) {
           <circle cx="19" cy="12" r="1" />
         </>
       )}
+      {name === "plus" && <path d="M12 5v14M5 12h14" />}
     </svg>
   );
 }
@@ -116,7 +120,7 @@ export function BottomNav({ tabs, menuOpen = false }: Props) {
   return (
     <nav
       aria-label="Navegación principal móvil"
-      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-ink-100 bg-paper-raised pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] shadow-[0_-4px_16px_rgba(7,26,34,0.06)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-ink-100 bg-paper-raised pb-[max(env(safe-area-inset-bottom),0.5rem)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] shadow-[0_-4px_16px_rgba(7,26,34,0.06)] md:hidden"
     >
       {tabs.map((tab) => {
         const itemClass = ({ active }: { active: boolean }) =>
@@ -144,7 +148,7 @@ export function BottomNav({ tabs, menuOpen = false }: Props) {
                   >
                     <TabIcon name={tab.icon} active={isActive} />
                   </span>
-                  <span className="max-w-full truncate px-0.5">
+                  <span className="w-full max-w-full whitespace-normal break-words px-0.5 text-center leading-3">
                     {tab.label}
                   </span>
                 </>
@@ -161,28 +165,32 @@ export function BottomNav({ tabs, menuOpen = false }: Props) {
             data-testid={tab.testId}
             className={cx(
               "relative",
-              itemClass({ active: Boolean(tab.active) }),
+              tab.prominent
+                ? "z-10 flex min-h-16 min-w-0 flex-1 flex-col items-center justify-end gap-1 px-0.5 pb-1 text-[10px] font-semibold leading-3 text-slate-700"
+                : itemClass({ active: Boolean(tab.active) }),
             )}
             aria-label={tab.label}
             aria-haspopup="dialog"
             aria-expanded={Boolean(tab.active ?? menuOpen)}
-            aria-controls={
-              tab.testId === "bottom-nav-more-button"
-                ? "mobile-menu-panel"
-                : undefined
-            }
+            aria-controls={tab.controlsId}
           >
-            <span
-              className={cx(
-                "grid h-8 w-10 place-items-center rounded-xl",
-                (tab.active ?? menuOpen) && "bg-brand-100",
-              )}
-            >
-              <TabIcon
-                name={tab.icon}
-                active={Boolean(tab.active ?? menuOpen)}
-              />
-            </span>
+            {tab.prominent ? (
+              <span className="absolute -top-3 left-1/2 grid h-[52px] w-[52px] -translate-x-1/2 place-items-center rounded-full bg-brand-600 text-white shadow-raise ring-4 ring-paper-raised">
+                <TabIcon name={tab.icon} active={false} />
+              </span>
+            ) : (
+              <span
+                className={cx(
+                  "grid h-8 w-10 place-items-center rounded-xl",
+                  (tab.active ?? menuOpen) && "bg-brand-100",
+                )}
+              >
+                <TabIcon
+                  name={tab.icon}
+                  active={Boolean(tab.active ?? menuOpen)}
+                />
+              </span>
+            )}
             {tab.badge && (
               <span
                 aria-hidden="true"

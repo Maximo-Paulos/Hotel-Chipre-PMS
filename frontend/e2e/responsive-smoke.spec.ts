@@ -14,13 +14,10 @@ async function login(page: Page) {
 const mobileNavigation = (page: Page) =>
   page.getByRole("navigation", { name: /^(?:Navegación móvil|Mobile navigation)$/i });
 const mobileNavigationDialog = (page: Page) =>
-  page.getByRole("dialog", { name: /^(?:Menú de navegación|Navigation menu)$/i });
+  page.getByRole("dialog", { name: /^(?:Acciones y más|Actions and more)$/i });
 
-// B7: mobile nav collapsed from two competing mechanisms (horizontal-scroll
-// pill row + a separate native <details> disclosure) into one menu button
-// that opens a slide-over panel. The panel unmounts when closed (same
-// pattern as ReservationDetailDrawer), so any locator inside it needs the
-// menu opened first.
+// The bottom action button and the identity button open the same quick-action
+// sheet. The panel unmounts when closed, so locators inside it need it open.
 async function openMobileMenu(page: Page) {
   await page.getByTestId("mobile-menu-button").click();
   await expect(mobileNavigationDialog(page)).toBeVisible();
@@ -33,7 +30,7 @@ test.describe("Responsive mobile smoke", () => {
 
     const nav = mobileNavigation(page);
     await expect(page.getByTestId("mobile-screen-title")).toHaveText("Dashboard");
-    await expect(nav.getByTestId("bottom-nav-more-button")).toBeVisible();
+    await expect(nav.getByTestId("bottom-nav-actions-button")).toBeVisible();
     const slotCount = await nav.locator("a, button").count();
     expect(slotCount).toBeLessThanOrEqual(5);
 
@@ -45,9 +42,13 @@ test.describe("Responsive mobile smoke", () => {
     );
     expect(targetBoxes.every((box) => box.width >= 48 && box.height >= 64)).toBe(true);
 
-    const moreButton = page.getByTestId("bottom-nav-more-button");
-    await moreButton.click();
+    const actionsButton = page.getByTestId("bottom-nav-actions-button");
+    await actionsButton.click();
     await expect(mobileNavigationDialog(page)).toBeVisible();
+    const navBox = await nav.boundingBox();
+    const actionsBox = await actionsButton.boundingBox();
+    expect(navBox && actionsBox).toBeTruthy();
+    expect(Math.abs((actionsBox!.x + actionsBox!.width / 2) - (navBox!.x + navBox!.width / 2))).toBeLessThanOrEqual(8);
     const menuScrollRegion = page.getByTestId("mobile-menu-scroll-region");
     await menuScrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
     await expect.poll(() => menuScrollRegion.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
@@ -55,9 +56,9 @@ test.describe("Responsive mobile smoke", () => {
     await expect(settingsNavigation.locator("a").last()).toBeInViewport({ ratio: 1 });
     await page.keyboard.press("Escape");
     await expect(mobileNavigationDialog(page)).toBeHidden();
-    await expect(moreButton).toBeFocused();
+    await expect(actionsButton).toBeFocused();
 
-    await moreButton.click();
+    await actionsButton.click();
     await expect(mobileNavigationDialog(page)).toBeVisible();
     await mobileNavigation(page).locator('a[href="/reservas"]').click();
     await expect(page.getByTestId("mobile-screen-title")).toHaveText("Reservas");
@@ -75,8 +76,12 @@ test.describe("Responsive mobile smoke", () => {
     await login(page);
     await page.setViewportSize({ width: 390, height: 844 });
 
-    const primaryAction = page.getByRole("link", { name: /^(?:Nueva reserva|New reservation)$/i });
-    const secondaryAction = page.getByRole("link", { name: /^(?:Asignar habitación|Assign room)$/i });
+    await expect(page.getByTestId("dashboard-primary-actions")).toBeHidden();
+    const newReservationAction = page.getByTestId("quick-action-new-reservation");
+    const assignRoomAction = page.getByTestId("quick-action-assign-room");
+    await openMobileMenu(page);
+    const primaryAction = newReservationAction;
+    const secondaryAction = assignRoomAction;
     const primaryActionBox = await primaryAction.boundingBox();
     const secondaryActionBox = await secondaryAction.boundingBox();
     expect(primaryActionBox?.height, "primary dashboard action should be at least 52px high on mobile").toBeGreaterThanOrEqual(52);
@@ -89,7 +94,6 @@ test.describe("Responsive mobile smoke", () => {
       .not.toBe("none");
     await expect(page.getByTestId("mobile-menu-button")).toBeVisible();
 
-    await openMobileMenu(page);
     await expect(mobileNavigation(page).locator('a[href="/reservas"]')).toBeVisible();
     // The long hotel name has to render inside the menu for the overflow check
     // below to mean anything. A single-hotel account has no selector (a
