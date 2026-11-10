@@ -657,6 +657,7 @@ export function AppShell() {
                         {canCreateReservation && (
                           <Link
                             to="/reservas?crear=1"
+                            onClick={() => setMobileMenuOpen(false)}
                             data-testid="quick-action-new-reservation"
                             className="inline-flex min-h-[52px] items-center justify-center rounded-control bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-raise hover:bg-brand-700"
                           >
@@ -666,6 +667,7 @@ export function AppShell() {
                         {canAssignRooms && (
                           <Link
                             to="/operacion/planilla"
+                            onClick={() => setMobileMenuOpen(false)}
                             data-testid="quick-action-assign-room"
                             className={cx(
                               "inline-flex min-h-[52px] items-center justify-center rounded-control px-4 py-3 text-sm font-semibold",
@@ -689,6 +691,7 @@ export function AppShell() {
                       <NavLink
                         key={item.to}
                         to={item.to}
+                        onClick={() => setMobileMenuOpen(false)}
                         className={({ isActive }) =>
                           cx(
                             "flex min-h-12 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
@@ -708,6 +711,7 @@ export function AppShell() {
                         <NavLink
                           key={item.to}
                           to={item.to}
+                          onClick={() => setMobileMenuOpen(false)}
                           className={({ isActive }) =>
                             cx(
                             "flex min-h-12 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",

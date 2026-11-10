@@ -108,6 +108,8 @@ function apiMock(permissions: string[], blockedWrites: string[]) {
       payload = [];
     } else if (path === `${apiPath}/reservations/actions/pending` || path === `${apiPath}/reservations/cancellation-reviews/pending`) {
       payload = [];
+    } else if (path === `${apiPath}/reservations/occupancy-grid`) {
+      payload = { rooms: [], reservations: [], unassigned: [], blocks: [] };
     } else if (path.startsWith(`${apiPath}/events/`)) {
       payload = [];
     }
@@ -203,22 +205,40 @@ test("mobile quick actions fit and only navigate to existing flows", async ({ pa
   await expect(page).toHaveURL(/\/reservas\?crear=1$/);
   await expect(actionDialog(page)).toBeHidden();
 
-  await page.evaluate(() => {
-    window.history.pushState({}, "", "/dashboard");
-    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
-  });
+  // The reservation route opens a modal; Back closes it through the real
+  // router history before continuing the dashboard action flow.
+  await page.goBack();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.getByTestId("bottom-nav-actions-button").click();
   await page.getByTestId("quick-action-assign-room").click();
   await expect(page).toHaveURL(/\/operacion\/planilla$/);
+  await expect(page.getByTestId("occupancy-planning-page")).toBeVisible();
+  await expect(page.getByText("Cargando planilla...", { exact: true })).toHaveCount(0);
+  await expect(actionDialog(page)).toBeHidden();
+
+  // Selecting an action that points to the current route must still dismiss
+  // the sheet even though React Router has no location change to observe.
+  await page.getByTestId("bottom-nav-actions-button").click();
+  await expect(actionDialog(page)).toBeVisible();
+  await page.getByTestId("quick-action-assign-room").click();
+  await expect(page).toHaveURL(/\/operacion\/planilla$/);
+  await expect(actionDialog(page)).toBeHidden();
+
+  // The route directory has the same edge case for its active NavLink.
+  await page.getByTestId("bottom-nav-actions-button").click();
+  await expect(actionDialog(page)).toBeVisible();
+  await page.getByRole("navigation", { name: "Navegación móvil" }).locator('a[href="/operacion/planilla"]').click();
+  await expect(page).toHaveURL(/\/operacion\/planilla$/);
+  await expect(actionDialog(page)).toBeHidden();
+
+  await page.getByTestId("bottom-nav-actions-button").click();
+  await expect(actionDialog(page)).toBeVisible();
+  await page.getByTestId("mobile-menu-scroll-region").locator('a[href="/dashboard"]').click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(actionDialog(page)).toBeHidden();
   expect(blockedWrites).toEqual([]);
   expect(pageErrors).toEqual([]);
 
-  await page.evaluate(() => {
-    window.history.pushState({}, "", "/dashboard");
-    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
-  });
-  await expect(page).toHaveURL(/\/dashboard$/);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.getByTestId("bottom-nav-actions-button")).toBeHidden();
   await expect(page.getByTestId("dashboard-primary-actions")).toBeVisible();
